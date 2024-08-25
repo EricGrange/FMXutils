@@ -2,15 +2,14 @@ unit FPointCloud;
 
 interface
 
-{$i dws.inc}
-{$EXCESSPRECISION OFF}
+{$i fmxu.inc}
 
 uses
   System.SysUtils, System.Types, System.UITypes, System.Classes, System.Variants,
   System.UIConsts, System.Math, System.Diagnostics,
   FMX.Types, FMX.Controls, FMX.Forms, FMX.Graphics, FMX.Dialogs, FMX.Viewport3D,
   FMX.Controls.Presentation, FMX.StdCtrls, System.Math.Vectors, FMX.Controls3D,
-  FMX.Objects3D, FMX.MaterialSources, FMX.Types3D, System.RTLConsts, dwsModel3DFilePLY,
+  FMX.Objects3D, FMX.MaterialSources, FMX.Types3D, System.RTLConsts,
   FMX.Edit, FMX.EditBox, FMX.ComboTrackBar, FMX.ListBox,
   FMXU.D3DShaderCompiler, FMXU.PointCloud, FMXU.VertexBuffer, FMXU.Material.PointColor,
   FMXU.Viewport3D;
