@@ -84,7 +84,7 @@ implementation
 // ------------------------------------------------------------------
 // ------------------------------------------------------------------
 
-uses FMXU.D3DShaderCompiler, FMXU.Context;
+uses FMXU.D3DShaderCompiler, FMXU.Context, FMXU.Materials;
 
 // ------------------
 // ------------------ TPointColorMaterialSource ------------------
@@ -146,6 +146,11 @@ end;
 procedure TPointColorMaterial.PrepareShaders;
 begin
    inherited;
+
+   Assert(
+      ContextShaderArchitecture = TContextShaderArch.DX11,
+      'Only DX11 supported right now'
+   );
 
    case Shape of
       pcsQuad : PrepareQuadsShaders;
