@@ -21,7 +21,10 @@ interface
 
 uses System.SysUtils, FMX.Types3D;
 
+{: Returns current context shader architecture }
 function ContextShaderArch : TContextShaderArch;
+{: Returns context shader in simplified form (DX11, GLSL & Metal only) }
+function ContextShaderArchSimplified : TContextShaderArch;
 
 function CreateContextShader(
    kind : TContextShaderKind; const shaderCode : AnsiString;
@@ -42,6 +45,7 @@ uses FMXU.D3DShaderCompiler;
 var
    vPrepared : Boolean;
    vContextShaderArch : TContextShaderArch;
+   vContextShaderSimplifiedArch : TContextShaderArch;
    vShaderIndexBase : Integer;
    vD3D_VS_Target, vD3D_PS_Target : AnsiString;
 
@@ -52,18 +56,25 @@ begin
    vShaderIndexBase := 0;
 
    var contextClassName := TContextManager.DefaultContextClass.ClassName;
-   if contextClassName = 'TDX9Context' then begin
+   if Pos('DX9', contextClassName) > 0 then begin
       vContextShaderArch := TContextShaderArch.DX9;
       vD3D_VS_Target := 'vs_3_0';
       vD3D_PS_Target := 'ps_3_0';
-   end else if contextClassName = 'TDX11Context' then begin
+   end else if Pos('DX11', contextClassName) > 0 then begin
       vContextShaderArch := TContextShaderArch.DX11;
+      vContextShaderSimplifiedArch := TContextShaderArch.DX11;
       vD3D_VS_Target := 'vs_4_0';
       vD3D_PS_Target := 'ps_4_0';
-   end else if contextClassName = 'TCustomContextOpenGL' then begin
+   end else if Pos('Android', contextClassName) > 0 then begin
+      vContextShaderArch := TContextShaderArch.Android;
+      vContextShaderSimplifiedArch := TContextShaderArch.GLSL;
+      vShaderIndexBase := 1;
+   end else if Pos('OpenGL', contextClassName) > 0 then begin
       vContextShaderArch := TContextShaderArch.GLSL;
-   end else if contextClassName = 'TCustomContextMetal' then begin
+      vContextShaderSimplifiedArch := TContextShaderArch.GLSL;
+   end else if Pos('Metal', contextClassName) > 0 then begin
       vContextShaderArch := TContextShaderArch.Metal;
+      vContextShaderSimplifiedArch := TContextShaderArch.Metal;
       vShaderIndexBase := 1;
    end else begin
       raise EContext3DException.CreateFmt(
@@ -83,6 +94,17 @@ begin
       Result := Prepare;
 end;
 
+// ContextShaderArchSimplified
+//
+function ContextShaderArchSimplified : TContextShaderArch;
+begin
+   Result := vContextShaderSimplifiedArch;
+   if Result = TContextShaderArch.Undefined then begin
+      Prepare;
+      Result := vContextShaderSimplifiedArch;
+   end;
+end;
+
 // ShaderVariableSize
 //
 function ShaderVariableSize(kind : TContextShaderVariableKind) : Integer;
@@ -92,8 +114,8 @@ begin
    // just yet, so what's unknown is protected by asserts
    case kind of
       TContextShaderVariableKind.Matrix :
-         case vContextShaderArch of
-            TContextShaderArch.DX9, TContextShaderArch.GLSL, TContextShaderArch.Metal :
+         case vContextShaderSimplifiedArch of
+            TContextShaderArch.GLSL, TContextShaderArch.Metal :
                Result := 4;
             TContextShaderArch.DX11 :
                Result := 64;
@@ -102,8 +124,8 @@ begin
             Assert(False, 'TODO');
          end;
       TContextShaderVariableKind.Vector :
-         case vContextShaderArch of
-            TContextShaderArch.DX9, TContextShaderArch.GLSL, TContextShaderArch.Metal :
+         case vContextShaderSimplifiedArch of
+            TContextShaderArch.GLSL, TContextShaderArch.Metal :
                Result := 1;
             TContextShaderArch.DX11 :
                Result := 16;
@@ -148,12 +170,13 @@ begin
    end;
 
    // build variables array
-   variableIndex := vShaderIndexBase;
    if kind = TContextShaderKind.VertexShader then begin
+      variableIndex := vShaderIndexBase;
       SetLength(variables, nbVariables + 1);
       variablePtr := Pointer(variables);
       AddSource('MVPMatrix', TContextShaderVariableKind.Matrix);
    end else begin
+      variableIndex := 0;
       SetLength(variables, nbVariables);
       variablePtr := Pointer(variables);
    end;
@@ -173,7 +196,7 @@ begin
             Assert(False);
          end;
       end;
-      TContextShaderArch.GLSL, TContextShaderArch.Metal : begin
+      TContextShaderArch.Android, TContextShaderArch.GLSL, TContextShaderArch.Metal : begin
          SetLength(shaderData, Length(shaderCode));
          System.Move(Pointer(shaderCode)^, Pointer(shaderData)^, Length(shaderCode));
       end;
