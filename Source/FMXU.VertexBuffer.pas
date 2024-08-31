@@ -303,7 +303,7 @@ begin
    var vY : Double := v.Y;
    var vZ : Double := v.Z;
    var p := points.Buffer;
-   var stride : NativeInt := points.Stride;
+   var stride : NativeUInt := points.Stride;
    {$IFOPT R+}{$DEFINE RANGEON}{$R-}{$ELSE}{$UNDEF RANGEON}{$ENDIF}
    for var i := 0 to points.Count-1 do begin
       destResult[i] := p.X * vX + p.Y * vY + p.Z * vZ;
