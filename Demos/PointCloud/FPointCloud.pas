@@ -103,15 +103,59 @@ begin
          c.A := 1;
          cloud.Points.Color0[i] := c.Color;
       end;
-
-      // auto-center and scale
-
-      var bary := BufferBarycenter(cloud.Points);
-      var factor := 20 / BufferAverageDistance(cloud.Points, bary);
-      BufferOffsetAndScale(cloud.Points, -bary, factor);//.X, -bary.Y, -bary.Z), );
    finally
       line.Free;
       objFile.Free;
+   end;
+end;
+
+// ghetto loader for txt point clouds from CloudDompare
+// assumes each line is x y z (float) r g b (int) with no header
+procedure LoadFromTxt(const txtFileName : String; cloud : TPointCloud3D);
+var
+   fmt : TFormatSettings;
+
+   function ParseFloat(const s : String) : Double;
+   begin
+      if not TryStrToFloat(s, Result, fmt) then
+         Assert(False, s);
+   end;
+
+   function ParseInt(const s : String) : Integer;
+   begin
+      if not TryStrToInt(s, Result) then
+         Assert(False, s);
+   end;
+
+begin
+   fmt := FormatSettings;
+   fmt.DecimalSeparator := '.';
+   fmt.ThousandSeparator := ',';
+
+   var txtFile := TStringList.Create;
+   var line := TStringList.Create('"', ' ');
+   try
+      // keep only 'v' lines
+      txtFile.LoadFromFile(txtFileName);
+
+      cloud.Points.Length := txtFile.Count;
+      for var i := 0 to txtFile.Count-1 do begin
+         line.DelimitedText := txtFile[i];
+         cloud.Points.Vertices[i] := Point3D(
+            ParseFloat(line[1]),
+            ParseFloat(line[0]),
+            -ParseFloat(line[2])
+         );
+         var c : TAlphaColorRec;
+         c.R := ParseInt(line[3]);
+         c.G := ParseInt(line[4]);
+         c.B := ParseInt(line[5]);
+         c.A := 1;
+         cloud.Points.Color0[i] := c.Color;
+      end;
+   finally
+      line.Free;
+      txtFile.Free;
    end;
 end;
 
@@ -124,12 +168,33 @@ begin
    FPointCloud := TPointCloud3D.Create(Self);
    FPointCloud.Parent := Viewport3D1;
 
-   LoadFromObj(
-      '..\..\..\Data\Fish_SimpVal_1.obj',
-      FPointCloud
-   );
+   LoadFromTxt('E:\PointCloud\Data\VILLA DONDI.txt', FPointCloud);
+//   LoadFromObj('..\..\..\Data\Fish_SimpVal_1.obj', FPointCloud);
+(*
+   var n := 10000;
+   FPointCloud.Points.Length := n;
+   for var i := 0 to n-1 do begin
+      var r := 0.25 + i/n;
+      var a := i/n * 32 * PI;
+      var p : TPoint3D;
+      p.X := Cos(a)*r;
+      p.Y := 2*i/n-1;
+      p.Z := Sin(a)*r;
+      FPointCloud.Points.Vertices[i] := p;
+      var color : TAlphaColorRec;
+      color.R := Round(255*(Cos(i/n*PI)*0.5 + 0.5));
+      color.G := Round(255*(Cos(i/n*PI + PI/4)*0.5 + 0.5));
+      color.B := Round(255*(Cos(i/n*PI + PI/2)*0.5 + 0.5));
+      color.A := 255;
+      FPointCloud.Points.Color0[i] := color.Color;
+   end;
+*)
+   // auto-center and scale
+   var bary := BufferBarycenter(FPointCloud.Points);
+   var factor := 20 / BufferAverageDistance(FPointCloud.Points, bary);
+   BufferOffsetAndScale(FPointCloud.Points, -bary, factor);
 
-   CBShape.ItemIndex := 0;
+   CBShape.ItemIndex := Ord(pcsQuad);
    CTBPointSizeChangeTracking(Sender);
    CBShapeChange(Sender);
 end;

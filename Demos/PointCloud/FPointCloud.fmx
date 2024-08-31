@@ -23,9 +23,6 @@ object PointCloudForm: TPointCloudForm
   end
   object Panel1: TPanel
     Align = Top
-    Padding.Left = 16.000000000000000000
-    Padding.Top = 8.000000000000000000
-    Padding.Bottom = 8.000000000000000000
     Size.Width = 640.000000000000000000
     Size.Height = 40.000000000000000000
     Size.PlatformDefault = False
@@ -37,9 +34,11 @@ object PointCloudForm: TPointCloudForm
         'Points'
         'Discs'
         'Gaussian')
-      Position.X = 97.000000000000000000
+      Margins.Top = 8.000000000000000000
+      Margins.Bottom = 8.000000000000000000
+      Position.X = 95.000000000000000000
       Position.Y = 8.000000000000000000
-      Size.Width = 129.000000000000000000
+      Size.Width = 130.000000000000000000
       Size.Height = 24.000000000000000000
       Size.PlatformDefault = False
       TabOrder = 0
@@ -54,8 +53,10 @@ object PointCloudForm: TPointCloudForm
       Value = 50.000000000000000000
       KeyboardType = NumberPad
       Frequency = 0.000000000000000000
-      Position.X = 323.000000000000000000
+      Position.X = 309.000000000000000000
       Position.Y = 8.000000000000000000
+      Margins.Top = 8.000000000000000000
+      Margins.Bottom = 8.000000000000000000
       Size.Width = 100.000000000000000000
       Size.Height = 24.000000000000000000
       Size.PlatformDefault = False
@@ -63,23 +64,34 @@ object PointCloudForm: TPointCloudForm
     end
     object Label1: TLabel
       Align = Left
+      AutoSize = True
+      Margins.Left = 16.000000000000000000
+      Margins.Top = 8.000000000000000000
+      Margins.Right = 16.000000000000000000
+      Margins.Bottom = 8.000000000000000000
       Position.X = 16.000000000000000000
       Position.Y = 8.000000000000000000
-      Size.Width = 81.000000000000000000
+      Size.Width = 63.000000000000000000
       Size.Height = 24.000000000000000000
       Size.PlatformDefault = False
+      TextSettings.WordWrap = False
       TextSettings.Trimming = None
       Text = 'Point Shape'
       TabOrder = 3
     end
     object Label2: TLabel
       Align = Left
+      AutoSize = True
       Margins.Left = 16.000000000000000000
-      Position.X = 242.000000000000000000
+      Margins.Top = 8.000000000000000000
+      Margins.Right = 16.000000000000000000
+      Margins.Bottom = 8.000000000000000000
+      Position.X = 241.000000000000000000
       Position.Y = 8.000000000000000000
-      Size.Width = 81.000000000000000000
+      Size.Width = 52.000000000000000000
       Size.Height = 24.000000000000000000
       Size.PlatformDefault = False
+      TextSettings.WordWrap = False
       TextSettings.Trimming = None
       Text = 'Point Size'
       ParentShowHint = False
