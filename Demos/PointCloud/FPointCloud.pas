@@ -168,18 +168,18 @@ begin
    FPointCloud := TPointCloud3D.Create(Self);
    FPointCloud.Parent := Viewport3D1;
 
-   LoadFromTxt('E:\PointCloud\Data\VILLA DONDI.txt', FPointCloud);
+//   LoadFromTxt('E:\PointCloud\Data\VILLA DONDI.txt', FPointCloud);
 //   LoadFromObj('..\..\..\Data\Fish_SimpVal_1.obj', FPointCloud);
-(*
+
    var n := 10000;
    FPointCloud.Points.Length := n;
    for var i := 0 to n-1 do begin
       var r := 0.25 + i/n;
       var a := i/n * 32 * PI;
       var p : TPoint3D;
-      p.X := Cos(a)*r;
-      p.Y := 2*i/n-1;
-      p.Z := Sin(a)*r;
+      p.X := Cos(a)*r + (Random - 0.5) * 0.1;
+      p.Y := 2*i/n-1 + (Random - 0.5) * 0.1;
+      p.Z := Sin(a)*r + (Random - 0.5) * 0.1;
       FPointCloud.Points.Vertices[i] := p;
       var color : TAlphaColorRec;
       color.R := Round(255*(Cos(i/n*PI)*0.5 + 0.5));
@@ -188,7 +188,7 @@ begin
       color.A := 255;
       FPointCloud.Points.Color0[i] := color.Color;
    end;
-*)
+//*)
    // auto-center and scale
    var bary := BufferBarycenter(FPointCloud.Points);
    var factor := 20 / BufferAverageDistance(FPointCloud.Points, bary);
