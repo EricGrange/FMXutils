@@ -79,3 +79,6 @@ __recovery/
 
 # Boss dependency manager vendor folder https://github.com/HashLoad/boss
 modules/
+/Demos/PointCloud/Android
+/Demos/PointCloud/AndroidManifest.template.xml
+/Demos/PointCloud/*.deployproj
