@@ -12,21 +12,21 @@ uses
   FMX.Objects3D, FMX.MaterialSources, FMX.Types3D, System.RTLConsts,
   FMX.Edit, FMX.EditBox, FMX.ComboTrackBar, FMX.ListBox,
   FMXU.D3DShaderCompiler, FMXU.PointCloud, FMXU.VertexBuffer, FMXU.Material.PointColor,
-  FMXU.Viewport3D;
+  FMXU.Viewport3D, FMXU.Scene;
 
 type
   TPointCloudForm = class(TForm)
     Viewport3D1: TViewport3D;
-    Camera1: TCamera;
-    DummyY: TDummy;
+    Camera: TCamera;
+    DummyTarget: TDummy;
     Panel1: TPanel;
     CBShape: TComboBox;
     CTBPointSize: TComboTrackBar;
     Label1: TLabel;
     Label2: TLabel;
-    DummyX: TDummy;
     TimerFPS: TTimer;
-    Timer1: TTimer;
+    BULoadModel: TButton;
+    OpenDialog: TOpenDialog;
     procedure FormCreate(Sender: TObject);
     procedure FormMouseDown(Sender: TObject; Button: TMouseButton;
       Shift: TShiftState; X, Y: Single);
@@ -40,6 +40,7 @@ type
       const ARect: TRectF);
     procedure FormMouseUp(Sender: TObject; Button: TMouseButton;
       Shift: TShiftState; X, Y: Single);
+    procedure BULoadModelClick(Sender: TObject);
   private
     { Private declarations }
     FMouseDownPos : TPoint3D;
@@ -49,6 +50,7 @@ type
     FRunningFPS : Double;
 
     procedure OnApplicationIdle(Sender: TObject; var Done: Boolean);
+    procedure AutoCenterAndScale;
   public
     { Public declarations }
   end;
@@ -159,6 +161,14 @@ begin
    end;
 end;
 
+procedure TPointCloudForm.AutoCenterAndScale;
+begin
+   var bary := BufferBarycenter(FPointCloud.Points);
+   var factor := 20 / BufferAverageDistance(FPointCloud.Points, bary);
+   BufferOffsetAndScale(FPointCloud.Points, -bary, factor);
+   FPointCloud.UpdatePoints;
+end;
+
 procedure TPointCloudForm.FormCreate(Sender: TObject);
 begin
    Application.OnIdle := OnApplicationIdle;
@@ -167,6 +177,10 @@ begin
 
    FPointCloud := TPointCloud3D.Create(Self);
    FPointCloud.Parent := Viewport3D1;
+
+   {$ifdef ANDROID}
+   BULoadModel.Visible := False;
+   {$endif}
 
 //   LoadFromTxt('E:\PointCloud\Data\VILLA DONDI.txt', FPointCloud);
 //   LoadFromObj('..\..\..\Data\Fish_SimpVal_1.obj', FPointCloud);
@@ -189,10 +203,8 @@ begin
       FPointCloud.Points.Color0[i] := color.Color;
    end;
 //*)
-   // auto-center and scale
-   var bary := BufferBarycenter(FPointCloud.Points);
-   var factor := 20 / BufferAverageDistance(FPointCloud.Points, bary);
-   BufferOffsetAndScale(FPointCloud.Points, -bary, factor);
+
+   AutoCenterAndScale;
 
    CBShape.ItemIndex := Ord(pcsQuad);
    CTBPointSizeChangeTracking(Sender);
@@ -213,8 +225,10 @@ procedure TPointCloudForm.FormMouseMove(Sender: TObject; Shift: TShiftState; X,
   Y: Single);
 begin
    if Shift = [ssLeft ] then begin
-      DummyY.RotationAngle.Y := DummyY.RotationAngle.Y + (X - FMouseDownPos.X) * 0.1;
-      DummyX.RotationAngle.X := DummyX.RotationAngle.X - (Y - FMouseDownPos.Y) * 0.1;
+      MoveControl3DAroundTarget(
+         Camera, DummyTarget,
+         (Y - FMouseDownPos.Y) * 0.2, (X - FMouseDownPos.X) * 0.2
+      );
       FMouseDownPos.X := X;
       FMouseDownPos.Y := Y;
    end;
@@ -229,7 +243,27 @@ end;
 procedure TPointCloudForm.FormMouseWheel(Sender: TObject; Shift: TShiftState;
   WheelDelta: Integer; var Handled: Boolean);
 begin
-   Camera1.AngleOfView := Camera1.AngleOfView * Power(1.15, WheelDelta / 120);
+   Camera.AngleOfView := Camera.AngleOfView * Power(1.15, WheelDelta / 120);
+end;
+
+procedure TPointCloudForm.BULoadModelClick(Sender: TObject);
+begin
+   if BULoadModel.Tag = 0 then begin
+      ShowMessage('''
+                  Only supports OBJ files with 3 textures coordinates as RGB in 0-1 range
+                  and TXT files with "x y z r g b" lines (xyz float, rgb integer in 0-255 range)
+                  ''');
+      BULoadModel.Tag := 1;
+   end;
+
+   if not OpenDialog.Execute then Exit;
+   var ext := ExtractFileExt(OpenDialog.FileName);
+   if SameText(ext, '.obj') then
+      LoadFromObj(OpenDialog.FileName, FPointCloud)
+   else if SameText(ext, '.txt') then
+      LoadFromTxt(OpenDialog.FileName, FPointCloud);
+
+   AutoCenterAndScale;
 end;
 
 procedure TPointCloudForm.CBShapeChange(Sender: TObject);
@@ -242,8 +276,6 @@ begin
    FPointCloud.PointSize := CTBPointSize.Value / 100;
 end;
 
-// OnApplicationIdle
-//
 procedure TPointCloudForm.OnApplicationIdle(Sender: TObject; var Done: Boolean);
 begin
    Viewport3D1.Repaint;

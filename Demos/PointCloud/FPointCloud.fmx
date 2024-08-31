@@ -16,11 +16,6 @@ object PointCloudForm: TPointCloudForm
     Left = 72
     Top = 80
   end
-  object Timer1: TTimer
-    Interval = 10
-    Left = 72
-    Top = 160
-  end
   object Panel1: TPanel
     Align = Top
     Size.Width = 640.000000000000000000
@@ -36,7 +31,7 @@ object PointCloudForm: TPointCloudForm
         'Gaussian')
       Margins.Top = 8.000000000000000000
       Margins.Bottom = 8.000000000000000000
-      Position.X = 95.000000000000000000
+      Position.X = 95.199996948242190000
       Position.Y = 8.000000000000000000
       Size.Width = 130.000000000000000000
       Size.Height = 24.000000000000000000
@@ -53,7 +48,7 @@ object PointCloudForm: TPointCloudForm
       Value = 50.000000000000000000
       KeyboardType = NumberPad
       Frequency = 0.000000000000000000
-      Position.X = 309.000000000000000000
+      Position.X = 309.200012207031300000
       Position.Y = 8.000000000000000000
       Margins.Top = 8.000000000000000000
       Margins.Bottom = 8.000000000000000000
@@ -71,7 +66,7 @@ object PointCloudForm: TPointCloudForm
       Margins.Bottom = 8.000000000000000000
       Position.X = 16.000000000000000000
       Position.Y = 8.000000000000000000
-      Size.Width = 63.000000000000000000
+      Size.Width = 63.199996948242190000
       Size.Height = 24.000000000000000000
       Size.PlatformDefault = False
       TextSettings.WordWrap = False
@@ -86,7 +81,7 @@ object PointCloudForm: TPointCloudForm
       Margins.Top = 8.000000000000000000
       Margins.Right = 16.000000000000000000
       Margins.Bottom = 8.000000000000000000
-      Position.X = 241.000000000000000000
+      Position.X = 241.199996948242200000
       Position.Y = 8.000000000000000000
       Size.Width = 52.000000000000000000
       Size.Height = 24.000000000000000000
@@ -98,10 +93,25 @@ object PointCloudForm: TPointCloudForm
       ShowHint = False
       TabOrder = 2
     end
+    object BULoadModel: TButton
+      Align = Right
+      Margins.Top = 8.000000000000000000
+      Margins.Right = 16.000000000000000000
+      Margins.Bottom = 8.000000000000000000
+      Position.X = 520.000000000000000000
+      Position.Y = 8.000000000000000000
+      Size.Width = 104.000000000000000000
+      Size.Height = 24.000000000000000000
+      Size.PlatformDefault = False
+      TabOrder = 4
+      Text = 'Load model...'
+      TextSettings.Trimming = None
+      OnClick = BULoadModelClick
+    end
   end
   object Viewport3D1: TViewport3D
     Align = Client
-    Camera = Camera1
+    Camera = Camera
     Color = claBlack
     Multisample = None
     Size.Width = 640.000000000000000000
@@ -112,23 +122,23 @@ object PointCloudForm: TPointCloudForm
     OnMouseMove = FormMouseMove
     OnMouseUp = FormMouseUp
     OnPainting = Viewport3D1Painting
-    object DummyY: TDummy
+    object DummyTarget: TDummy
       Width = 1.000000000000000000
       Height = 1.000000000000000000
       Depth = 1.000000000000000000
-      object DummyX: TDummy
+      object Camera: TCamera
+        AngleOfView = 45.000000000000000000
+        Target = DummyTarget
+        Position.Z = -100.000000000000000000
         Width = 1.000000000000000000
         Height = 1.000000000000000000
         Depth = 1.000000000000000000
-        object Camera1: TCamera
-          AngleOfView = 45.000000000000000000
-          Target = DummyY
-          Position.Z = -100.000000000000000000
-          Width = 1.000000000000000000
-          Height = 1.000000000000000000
-          Depth = 1.000000000000000000
-        end
       end
     end
+  end
+  object OpenDialog: TOpenDialog
+    Filter = 'OBJ files (*.obj)|*.obj|TXT files (*.txt)|*.txt'
+    Left = 504
+    Top = 80
   end
 end
