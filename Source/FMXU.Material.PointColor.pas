@@ -84,7 +84,7 @@ implementation
 // ------------------------------------------------------------------
 // ------------------------------------------------------------------
 
-uses FMXU.D3DShaderCompiler, FMXU.Context, FMXU.Materials;
+uses FMXU.D3DShaderCompiler, FMXU.Context;
 
 // ------------------
 // ------------------ TPointColorMaterialSource ------------------
@@ -147,11 +147,6 @@ procedure TPointColorMaterial.PrepareShaders;
 begin
    inherited;
 
-   Assert(
-      ContextShaderArchitecture = TContextShaderArch.DX11,
-      'Only DX11 supported right now'
-   );
-
    case Shape of
       pcsQuad : PrepareQuadsShaders;
       pcsPoint : PreparePointShaders;
@@ -165,115 +160,175 @@ end;
 //
 procedure TPointColorMaterial.PreparePointShaders;
 begin
-   FVertexShader := CreateContextShader(TContextShaderKind.VertexShader,
-      '''
-      float4x4 MVPMatrix;
-      void main(float4 inPos : POSITION0, float4 inColor : COLOR0,
-         out float4 outPos : SV_POSITION0, out float4 outColor : COLOR0
-      )
-      {
-         outPos = mul(MVPMatrix, inPos);
-         outColor = float4(inColor.rgb, 1);
-      }
-      ''', [ ], [ ]
-   );
-   FPixelShader := CreateContextShader(TContextShaderKind.PixelShader,
-      '''
-      float4 main(float4 pos : SV_POSITION0, float4 color : COLOR0) : SV_Target
-      {
-         return color;
-      }
-      ''', [], []
-   );
+   case ContextShaderArchSimplified of
+      TContextShaderArch.DX11 : begin
+         FVertexShader := CreateContextShader(TContextShaderKind.VertexShader,
+            '''
+            float4x4 MVPMatrix;
+            void main(float4 inPos : POSITION0, float4 inColor : COLOR0,
+               out float4 outPos : SV_POSITION0, out float4 outColor : COLOR0
+            )
+            {
+               outPos = mul(MVPMatrix, inPos);
+               outColor = float4(inColor.rgb, 1);
+            }
+            ''', [ ], [ ]
+         );
+         FPixelShader := CreateContextShader(TContextShaderKind.PixelShader,
+            '''
+            float4 main(float4 pos : SV_POSITION0, float4 color : COLOR0) : SV_Target
+            {
+               return color;
+            }
+            ''', [], []
+         );
+      end;
+      TContextShaderArch.GLSL : begin
+         FVertexShader := CreateContextShader(TContextShaderKind.VertexShader,
+            '''
+            uniform vec4 _MVPMatrix[4];
+
+            attribute vec4 a_Position;
+            attribute vec4 a_Color;
+
+            varying vec4 outColor;
+
+            void main()
+            {
+                gl_Position.x = dot(_MVPMatrix[0], a_Position);
+                gl_Position.y = dot(_MVPMatrix[1], a_Position);
+                gl_Position.z = dot(_MVPMatrix[2], a_Position);
+                gl_Position.w = dot(_MVPMatrix[3], a_Position);
+
+                outColor = vec4(a_Color.rgb, 1.0);
+            }
+            ''', [ ], [ ]
+         );
+         FPixelShader := CreateContextShader(TContextShaderKind.PixelShader,
+            '''
+            varying vec4 outColor;
+
+            void main()
+            {
+                gl_FragColor = outColor;
+            }
+            ''', [], []
+         );
+      end;
+   else
+      Assert(False);
+   end;
 end;
 
 // PrepareQuadsShaders
 //
 procedure TPointColorMaterial.PrepareQuadsShaders;
 begin
-   FVertexShader := CreateContextShader(TContextShaderKind.VertexShader,
-      '''
-      float4x4 MVPMatrix;
-      float4 rightVector, upVector;
-      void main(
-         float4 inPos : POSITION0,         float4 inColor : COLOR0,
-         out float4 outPos : SV_POSITION0, out float4 outColor : COLOR0
-      )
-      {
-         if (inColor.a < 0.3) {
-            if (inColor.a < 0.1) {
-               inPos = inPos - rightVector - upVector;
-            } else {
-               inPos = inPos + rightVector - upVector;
+   case ContextShaderArchSimplified of
+      TContextShaderArch.DX11 : begin
+         FVertexShader := CreateContextShader(TContextShaderKind.VertexShader,
+            '''
+            float4x4 MVPMatrix;
+            float4 rightVector, upVector;
+            void main(
+               float4 inPos : POSITION0,         float4 inColor : COLOR0,
+               out float4 outPos : SV_POSITION0, out float4 outColor : COLOR0
+            )
+            {
+               if (inColor.a < 0.3) {
+                  if (inColor.a < 0.1) {
+                     inPos = inPos - rightVector - upVector;
+                  } else {
+                     inPos = inPos + rightVector - upVector;
+                  }
+               } else {
+                  if (inColor.a < 0.6) {
+                     inPos = inPos + rightVector + upVector;
+                  } else {
+                     inPos = inPos - rightVector + upVector;
+                  }
+               }
+               outPos = mul(MVPMatrix, inPos);
+               outColor = float4(inColor.rgb, 1);
             }
-         } else {
-            if (inColor.a < 0.6) {
-               inPos = inPos + rightVector + upVector;
-            } else {
-               inPos = inPos - rightVector + upVector;
+            ''', [
+               'rightVector',                      'upVector'
+            ], [
+               TContextShaderVariableKind.Vector,  TContextShaderVariableKind.Vector
+            ]
+         );
+         FPixelShader := CreateContextShader(TContextShaderKind.PixelShader,
+            '''
+            float4 main(float4 pos : SV_POSITION0, float4 color : COLOR0) : SV_Target
+            {
+               return color;
             }
-         }
-         outPos = mul(MVPMatrix, inPos);
-         outColor = float4(inColor.rgb, 1);
-      }
-      ''', [
-         'rightVector',                      'upVector'
-      ], [
-         TContextShaderVariableKind.Vector,  TContextShaderVariableKind.Vector
-      ]
-   );
-   FPixelShader := CreateContextShader(TContextShaderKind.PixelShader,
-      '''
-      float4 main(float4 pos : SV_POSITION0, float4 color : COLOR0) : SV_Target
-      {
-         return color;
-      }
-      ''', [], []
-   );
+            ''', [], []
+         );
+      end;
+      TContextShaderArch.GLSL : begin
+         FVertexShader := CreateContextShader(TContextShaderKind.VertexShader,
+            '''
+            uniform vec4 _MVPMatrix[4];
+            uniform vec4 _rightVector;
+            uniform vec4 _upVector;
+
+            attribute vec4 a_Position;
+            attribute vec4 a_Color;
+
+            varying vec4 outColor;
+
+            void main()
+            {
+                vec4 modifiedPos = a_Position;
+
+                if (a_Color.a < 0.3) {
+                    if (a_Color.a < 0.1) {
+                        modifiedPos = modifiedPos - _rightVector - _upVector;
+                    } else {
+                        modifiedPos = modifiedPos + _rightVector - _upVector;
+                    }
+                } else {
+                    if (a_Color.a < 0.6) {
+                        modifiedPos = modifiedPos + _rightVector + _upVector;
+                    } else {
+                        modifiedPos = modifiedPos - _rightVector + _upVector;
+                    }
+                }
+
+                gl_Position.x = dot(_MVPMatrix[0], modifiedPos);
+                gl_Position.y = dot(_MVPMatrix[1], modifiedPos);
+                gl_Position.z = dot(_MVPMatrix[2], modifiedPos);
+                gl_Position.w = dot(_MVPMatrix[3], modifiedPos);
+
+                outColor = vec4(a_Color.rgb, 1.0);
+            }
+            ''', [
+               'rightVector',                      'upVector'
+            ], [
+               TContextShaderVariableKind.Vector,  TContextShaderVariableKind.Vector
+            ]
+         );
+         FPixelShader := CreateContextShader(TContextShaderKind.PixelShader,
+            '''
+            varying vec4 outColor;
+
+            void main()
+            {
+                gl_FragColor = outColor;
+            }
+            ''', [], []
+         );
+      end
+   else
+      Assert(False);
+   end;
 end;
 
 // PrepareUVShaders
 //
 procedure TPointColorMaterial.PrepareUVShaders;
 begin
-   FVertexShader := CreateContextShader(TContextShaderKind.VertexShader,
-      '''
-      float4x4 MVPMatrix;
-      float4 rightVector, upVector;
-      void main(
-         float4 inPos : POSITION0,
-         float4 inColor : COLOR0,
-         out float4 outPos : SV_POSITION0,
-         out float4 outColor : COLOR0,
-         out float2 uv : TEXCOORD0
-      )
-      {
-         if (inColor.w < 0.3) {
-            if (inColor.w < 0.1) {
-               inPos = inPos - rightVector - upVector;
-               uv = float2(-1.0, -1.0);
-            } else {
-               inPos = inPos + rightVector - upVector;
-               uv = float2(+1.0, -1.0);
-            }
-         } else {
-            if (inColor.w < 0.6) {
-               inPos = inPos + rightVector + upVector;
-               uv = float2(+1.0, +1.0);
-            } else {
-               inPos = inPos - rightVector + upVector;
-               uv = float2(-1.0, +1.0);
-            }
-         }
-         outPos = mul(MVPMatrix, inPos);
-         outColor = float4(inColor.rgb, 1);
-      }
-      ''', [
-         'rightVector',                      'upVector'
-      ], [
-         TContextShaderVariableKind.Vector,  TContextShaderVariableKind.Vector
-      ]
-   );
    var colorCode : AnsiString := '';
    if Shape = pcsGaussian then begin
       colorCode :=
@@ -282,22 +337,135 @@ begin
          color.rgb *= color.a;
          ''';
    end;
-   FPixelShader := CreateContextShader(TContextShaderKind.PixelShader,
-      '''
-      float4 main(float4 pos : SV_POSITION0, float4 color : COLOR0, float2 uv : TEXCOORD0) : SV_Target
-      {
-         float r2 = dot(uv, uv);
-         if (r2 >= 1.0)
-            discard;
-         else {
-      '''
-            + colorCode +
-      '''
-         }
-         return color;
-      }
-      ''', [], []
-   );
+   case ContextShaderArchSimplified of
+      TContextShaderArch.DX11 : begin
+         FVertexShader := CreateContextShader(TContextShaderKind.VertexShader,
+            '''
+            float4x4 MVPMatrix;
+            float4 rightVector, upVector;
+            void main(
+               float4 inPos : POSITION0,
+               float4 inColor : COLOR0,
+               out float4 outPos : SV_POSITION0,
+               out float4 outColor : COLOR0,
+               out float2 uv : TEXCOORD0
+            )
+            {
+               if (inColor.w < 0.3) {
+                  if (inColor.w < 0.1) {
+                     inPos = inPos - rightVector - upVector;
+                     uv = float2(-1.0, -1.0);
+                  } else {
+                     inPos = inPos + rightVector - upVector;
+                     uv = float2(+1.0, -1.0);
+                  }
+               } else {
+                  if (inColor.w < 0.6) {
+                     inPos = inPos + rightVector + upVector;
+                     uv = float2(+1.0, +1.0);
+                  } else {
+                     inPos = inPos - rightVector + upVector;
+                     uv = float2(-1.0, +1.0);
+                  }
+               }
+               outPos = mul(MVPMatrix, inPos);
+               outColor = float4(inColor.rgb, 1);
+            }
+            ''', [
+               'rightVector',                      'upVector'
+            ], [
+               TContextShaderVariableKind.Vector,  TContextShaderVariableKind.Vector
+            ]
+         );
+         FPixelShader := CreateContextShader(TContextShaderKind.PixelShader,
+            '''
+            float4 main(float4 pos : SV_POSITION0, float4 color : COLOR0, float2 uv : TEXCOORD0) : SV_Target
+            {
+               float r2 = dot(uv, uv);
+               if (r2 >= 1.0)
+                  discard;
+               else {
+            '''
+                  + colorCode +
+            '''
+               }
+               return color;
+            }
+            ''', [], []
+         );
+      end;
+      TContextShaderArch.GLSL : begin
+         FVertexShader := CreateContextShader(TContextShaderKind.VertexShader,
+            '''
+            uniform vec4 _MVPMatrix[4];
+            uniform vec4 _rightVector;
+            uniform vec4 _upVector;
+
+            attribute vec4 a_Position;
+            attribute vec4 a_Color;
+
+            varying vec4 outColor;
+            varying vec2 uv;
+
+            void main()
+            {
+                vec4 modifiedPos = a_Position;
+
+                if (a_Color.w < 0.3) {
+                    if (a_Color.w < 0.1) {
+                        modifiedPos = modifiedPos - _rightVector - _upVector;
+                        uv = vec2(-1.0, -1.0);
+                    } else {
+                        modifiedPos = modifiedPos + _rightVector - _upVector;
+                        uv = vec2(1.0, -1.0);
+                    }
+                } else {
+                    if (a_Color.w < 0.6) {
+                        modifiedPos = modifiedPos + _rightVector + _upVector;
+                        uv = vec2(1.0, 1.0);
+                    } else {
+                        modifiedPos = modifiedPos - _rightVector + _upVector;
+                        uv = vec2(-1.0, 1.0);
+                    }
+                }
+
+                gl_Position.x = dot(_MVPMatrix[0], modifiedPos);
+                gl_Position.y = dot(_MVPMatrix[1], modifiedPos);
+                gl_Position.z = dot(_MVPMatrix[2], modifiedPos);
+                gl_Position.w = dot(_MVPMatrix[3], modifiedPos);
+
+                outColor = vec4(a_Color.rgb, 1.0);
+            }
+            ''', [
+               'rightVector',                      'upVector'
+            ], [
+               TContextShaderVariableKind.Vector,  TContextShaderVariableKind.Vector
+            ]
+         );
+         FPixelShader := CreateContextShader(TContextShaderKind.PixelShader,
+            '''
+            varying vec4 outColor;
+            varying vec2 uv;
+
+            void main()
+            {
+                float r2 = dot(uv, uv);
+                if (r2 >= 1.0)
+                    discard;
+                else {
+                    vec4 color = outColor;
+            '''
+                    + colorCode +
+            '''
+                    gl_FragColor = color;
+                }
+            }
+            ''', [], []
+         );
+      end
+   else
+      Assert(False);
+   end;
 end;
 
 // ClearShaders
