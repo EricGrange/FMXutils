@@ -23,6 +23,16 @@ uses
    System.SysUtils, System.Math.Vectors, System.RTLConsts,
    FMX.Types3D;
 
+type
+   TDoubleArray = array [0..MaxInt div 8-1] of Double;
+   PDoubleArray = ^TDoubleArray;
+
+   TPoint3DArrayInfo = packed record
+      Buffer : PPoint3D;
+      Stride, Count : Integer;
+      constructor CreateFromVertexBuffer(vb : TVertexBuffer);
+   end;
+
 //: Compute barycenter of the vertex buffer
 function BufferBarycenter(const buf : TVertexBuffer) : TPoint3D;
 //: Compute average distance of vertex buffer points to a given point
@@ -39,6 +49,13 @@ procedure IndexBufferSetSequence(buf : TIndexBuffer; base, increment : Integer);
    The vertex buffer should hold a sequence of the 4 vertices of each quad }
 function CreateIndexBufferQuadSequence(nbQuads : Integer) : TIndexBuffer;
 
+//: Performs double-precision dot product of an array
+procedure Point3DotProductToDoubleArray(
+   const points : TPoint3DArrayInfo;   // points array input
+   const v : TPoint3D;                 // vector3 for dot product
+   destResult : PDoubleArray           // destination result array
+);
+
 // ------------------------------------------------------------------
 // ------------------------------------------------------------------
 // ------------------------------------------------------------------
@@ -46,6 +63,15 @@ implementation
 // ------------------------------------------------------------------
 // ------------------------------------------------------------------
 // ------------------------------------------------------------------
+
+// CreateFromVertexBuffer
+//
+constructor TPoint3DArrayInfo.CreateFromVertexBuffer(vb : TVertexBuffer);
+begin
+   Buffer := vb.Buffer;
+   Stride := vb.VertexSize;
+   Count := vb.Length;
+end;
 
 // BufferBarycenter
 //
@@ -207,5 +233,84 @@ begin
       end;
    end;
 end;
+
+// BufferDotProductToDoubleArray
+//
+procedure Point3DotProductToDoubleArray(
+   const points : TPoint3DArrayInfo;
+   const v : TPoint3D;
+   destResult : PDoubleArray
+);
+{$ifdef WIN64_ASM}
+asm          // x86-64 clang 18.1
+   movsxd rax, dword ptr [rcx + 12]
+   test rax, rax
+   jle @@LBB0_5
+   movss xmm0, dword ptr [rdx]
+   cvtss2sd xmm1, xmm0
+   cvtps2pd xmm0, qword ptr [rdx + 4]
+   mov rdx, qword ptr [rcx]
+   cmp eax, 1
+   jne @@LBB0_6
+   xor ecx, ecx
+   jmp @@LBB0_3
+@@LBB0_6:
+   movsxd r9, dword ptr [rcx + 8]
+   mov r10d, eax
+   and r10d, 2147483646
+   lea r11, [r9 + r9]
+   xor ecx, ecx
+@@LBB0_7:
+   movss xmm2, dword ptr [rdx]
+   cvtss2sd xmm2, xmm2
+   mulsd xmm2, xmm1
+   cvtps2pd xmm3, qword ptr [rdx + 4]
+   mulpd xmm3, xmm0
+   addsd xmm2, xmm3
+   unpckhpd xmm3, xmm3
+   addsd xmm3, xmm2
+   movsd qword ptr [r8 + 8*rcx], xmm3
+   movss xmm2, dword ptr [rdx + r9]
+   cvtss2sd xmm2, xmm2
+   mulsd xmm2, xmm1
+   cvtps2pd xmm3, qword ptr [rdx + r9 + 4]
+   mulpd xmm3, xmm0
+   addsd xmm2, xmm3
+   unpckhpd xmm3, xmm3
+   addsd xmm3, xmm2
+   movsd qword ptr [r8 + 8*rcx + 8], xmm3
+   add rdx, r11
+   add rcx, 2
+   cmp r10, rcx
+   jne @@LBB0_7
+@@LBB0_3:
+   test al, 1
+   je @@LBB0_5
+   movss xmm2, dword ptr [rdx]
+   cvtss2sd xmm2, xmm2
+   mulsd xmm2, xmm1
+   cvtps2pd xmm1, qword ptr [rdx + 4]
+   mulpd xmm1, xmm0
+   addsd xmm2, xmm1
+   unpckhpd xmm1, xmm1
+   addsd xmm1, xmm2
+   movsd qword ptr [r8 + 8*rcx], xmm1
+@@LBB0_5:
+end;
+{$else}
+begin
+   var vX : Double := v.X;
+   var vY : Double := v.Y;
+   var vZ : Double := v.Z;
+   var p := points.Buffer;
+   var stride : NativeInt := points.Stride;
+   {$IFOPT R+}{$DEFINE RANGEON}{$R-}{$ELSE}{$UNDEF RANGEON}{$ENDIF}
+   for var i := 0 to points.Count-1 do begin
+      destResult[i] := p.X * vX + p.Y * vY + p.Z * vZ;
+      p := Pointer(UIntPtr(p) + stride);
+   end;
+   {$IFDEF RANGEON}{$R+}{$UNDEF RANGEON}{$ENDIF}
+end;
+{$endif}
 
 end.
