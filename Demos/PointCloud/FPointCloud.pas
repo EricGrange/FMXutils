@@ -11,7 +11,7 @@ uses
   FMX.Controls.Presentation, FMX.StdCtrls, System.Math.Vectors, FMX.Controls3D,
   FMX.Objects3D, FMX.MaterialSources, FMX.Types3D, System.RTLConsts,
   FMX.Edit, FMX.EditBox, FMX.ComboTrackBar, FMX.ListBox,
-  FMXU.D3DShaderCompiler, FMXU.PointCloud, FMXU.VertexBuffer, FMXU.Material.PointColor,
+  FMXU.D3DShaderCompiler, FMXU.PointCloud, FMXU.Buffers, FMXU.Material.PointColor,
   FMXU.Viewport3D, FMXU.Scene;
 
 type
@@ -185,22 +185,24 @@ begin
 //   LoadFromTxt('E:\PointCloud\Data\VILLA DONDI.txt', FPointCloud);
 //   LoadFromObj('..\..\..\Data\Fish_SimpVal_1.obj', FPointCloud);
 
-   var n := 10000;
-   FPointCloud.Points.Length := n;
-   for var i := 0 to n-1 do begin
-      var r := 0.25 + i/n;
-      var a := i/n * 32 * PI;
-      var p : TPoint3D;
-      p.X := Cos(a)*r + (Random - 0.5) * 0.1;
-      p.Y := 2*i/n-1 + (Random - 0.5) * 0.1;
-      p.Z := Sin(a)*r + (Random - 0.5) * 0.1;
-      FPointCloud.Points.Vertices[i] := p;
-      var color : TAlphaColorRec;
-      color.R := Round(255*(Cos(i/n*PI)*0.5 + 0.5));
-      color.G := Round(255*(Cos(i/n*PI + PI/4)*0.5 + 0.5));
-      color.B := Round(255*(Cos(i/n*PI + PI/2)*0.5 + 0.5));
-      color.A := 255;
-      FPointCloud.Points.Color0[i] := color.Color;
+   if FPointCloud.Points.Length = 1 then begin
+      var n := 2000000;
+      FPointCloud.Points.Length := n;
+      for var i := 0 to n-1 do begin
+         var r := 0.25 + i/n;
+         var a := i/n * 32 * PI;
+         var p : TPoint3D;
+         p.X := Cos(a)*r + (Random - 0.5) * 0.1;
+         p.Y := 2*i/n-1 + (Random - 0.5) * 0.1;
+         p.Z := Sin(a)*r + (Random - 0.5) * 0.1;
+         FPointCloud.Points.Vertices[i] := p;
+         var color : TAlphaColorRec;
+         color.R := Round(255*(Cos(i/n*PI)*0.5 + 0.5));
+         color.G := Round(255*(Cos(i/n*PI + PI/4)*0.5 + 0.5));
+         color.B := Round(255*(Cos(i/n*PI + PI/2)*0.5 + 0.5));
+         color.A := 255;
+         FPointCloud.Points.Color0[i] := color.Color;
+      end;
    end;
 //*)
 
