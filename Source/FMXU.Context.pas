@@ -16,10 +16,108 @@
 unit FMXU.Context;
 
 {$i fmxu.inc}
+{$SCOPEDENUMS ON}
 
 interface
 
-uses System.SysUtils, FMX.Types3D;
+uses
+   System.Classes, System.SysUtils, System.UIConsts,
+   FMX.Types3D, FMX.Materials,
+   FMXU.Buffers, FMXU.Colors;
+
+type
+   PContextShaderVariable = ^TContextShaderVariable;
+
+   TPrimitivesKindU = ( Points, Lines, Triangles, TrianglesStrip );
+
+   TFMXUContext3D = class (TContext3D)
+      private
+         class var vResourceList : array of IInterface;
+
+      protected
+         class function AddResource(const aResource : IInterface) : THandle;
+         class function GetResource(aResourceHandle : THandle) : IInterface;
+         class procedure RemoveResource(aResourceHandle : THandle);
+
+         function GetCurrentOpacity : Single;
+         procedure SetCurrentOpacity(opacity : Single);
+
+         function GetCurrentMaterial : TMaterial;
+         procedure SetCurrentMaterial(material : TMaterial);
+
+         function GetCurrentMaterialClass : TMaterialClass;
+         procedure SetCurrentMaterialClass(materialClass : TMaterialClass);
+
+         function StillValid(aContext3D : TContext3D) : Boolean; virtual; abstract;
+
+      public
+         // use in combination with DrawGPUPrimitives
+         procedure ApplyMaterial(const material: TMaterial; const opacity: Single); virtual;
+         procedure ResetMaterial; virtual;
+
+         procedure DrawGPUPrimitives(
+            const aKind : TPrimitivesKindU;
+            const vertices : TGPUVertexBuffer; const indices : TGPUIndexBuffer
+         ); virtual; abstract;
+
+         // jailbroken properties
+
+         property CurrentOpacity : Single read GetCurrentOpacity write SetCurrentOpacity;
+         property CurrentMaterial : TMaterial read GetCurrentMaterial write SetCurrentMaterial;
+         property CurrentMaterialClass : TMaterialClass read GetCurrentMaterialClass write SetCurrentMaterialClass;
+   end;
+
+   TFMXUContext3DHelper = class helper for TContext3D
+      public
+         procedure ApplyMaterial(const material: TMaterial; const opacity: Single);
+         procedure ResetMaterial;
+
+         procedure DrawGPUPrimitives(
+            const aKind : TPrimitivesKindU;
+            const vertices : TGPUVertexBuffer; const indices : TGPUIndexBuffer
+         );
+
+         // Helpers for classic methods
+
+         procedure DrawPrimitives(const aKind : TPrimitivesKind; const vertices : TGPUVertexBuffer; const indices : TGPUIndexBuffer; const material : TMaterial; const opacity : Single); overload;
+         procedure DrawTriangles(const vertices : TGPUVertexBuffer; const indices : TGPUIndexBuffer; const material : TMaterial; const opacity : Single); overload; inline;
+         procedure DrawLines(const vertices : TGPUVertexBuffer; const indices : TGPUIndexBuffer; const material : TMaterial; const opacity : Single); overload; inline;
+         procedure DrawPoints(const vertices : TGPUVertexBuffer; const indices : TGPUIndexBuffer; const material : TMaterial; const opacity : Single); overload; inline;
+
+         function SupportsGPUPrimitives : Boolean;
+         function GetFMXUContext : TFMXUContext3D;
+   end;
+
+   // wraps a context shader source in an interface
+   TIContextShaderSource = class;
+   IContextShaderSource = interface
+      ['{2345E06D-A1F7-437B-97D9-60549EAD26CB}']
+      function GetSelf : TIContextShaderSource;
+      function GetVariablesSize : Integer;
+      function GetUserData : IInterface;
+   end;
+   TIContextShaderSource = class(TInterfacedObject, IContextShaderSource)
+      protected
+         FSource : TContextShaderSource;
+         FVariablesSize : Integer;
+         FUserData : IInterface;
+
+         function GetSelf : TIContextShaderSource;
+         function GetVariablesSize : Integer;
+         function GetUserData : IInterface;
+
+      public
+         constructor Create(const aSource : TContextShaderSource; minVariableSlotSize : Integer);
+
+         property Source : TContextShaderSource read FSource;
+         property Code : TContextShaderCode read FSource.Code;
+         property Variables : TContextShaderVariables read FSource.Variables;
+         property VariablesSize : Integer read FVariablesSize;
+         property UserData : IInterface read FUserData write FUserData;
+   end;
+
+// Compare two TVertexDeclaration and return True if they're identical
+function SameVertexDeclaration(const a, b : TVertexDeclaration) : Boolean;
 
 {: Returns current context shader architecture }
 function ContextShaderArch : TContextShaderArch;
@@ -44,6 +142,7 @@ uses FMXU.D3DShaderCompiler;
 
 var
    vPrepared : Boolean;
+   vContextFinalized : Boolean;
    vContextShaderArch : TContextShaderArch;
    vContextShaderSimplifiedArch : TContextShaderArch;
    vShaderIndexBase : Integer;
@@ -103,6 +202,16 @@ begin
       Prepare;
       Result := vContextShaderSimplifiedArch;
    end;
+end;
+
+// SameVertexDeclaration
+//
+function SameVertexDeclaration(const a, b : TVertexDeclaration) : Boolean;
+begin
+   var n := Length(a);
+   if n <> Length(b) then Exit(False);
+
+   Result := CompareMem(Pointer(a), Pointer(b), n * SizeOf(a[0]));
 end;
 
 // ShaderVariableSize
@@ -209,6 +318,287 @@ begin
    Result := TContextShader.Create;
    Result.LoadFromData('', kind, '', source);
 end;
+
+// ------------------
+// ------------------ TFMXUContext3D ------------------
+// ------------------
+
+type
+   TContext3DMaterial = record
+      FCurrentOpacity: Single;
+      FCurrentMaterial: TMaterial;
+      FCurrentMaterialClass: TMaterialClass;
+   end;
+   PContext3DMaterial = ^TContext3DMaterial;
+
+// GetCurrentOpacity
+//
+function TFMXUContext3D.GetCurrentOpacity : Single;
+begin
+   Result := inherited CurrentOpacity;
+end;
+
+// SetCurrentOpacity
+//
+procedure TFMXUContext3D.SetCurrentOpacity(opacity : Single);
+begin
+   PSingle(@inherited CurrentOpacity)^ := opacity;
+end;
+
+// GetCurrentMaterial
+//
+function TFMXUContext3D.GetCurrentMaterial : TMaterial;
+begin
+   Result := PContext3DMaterial(@inherited CurrentOpacity).FCurrentMaterial;
+end;
+
+// SetCurrentMaterial
+//
+procedure TFMXUContext3D.SetCurrentMaterial(material : TMaterial);
+begin
+   PContext3DMaterial(@inherited CurrentOpacity).FCurrentMaterial := material;
+end;
+
+// GetCurrentMaterialClass
+//
+function TFMXUContext3D.GetCurrentMaterialClass : TMaterialClass;
+begin
+   Result := PContext3DMaterial(@inherited CurrentOpacity).FCurrentMaterialClass;
+end;
+
+// SetCurrentMaterialClass
+//
+procedure TFMXUContext3D.SetCurrentMaterialClass(materialClass : TMaterialClass);
+begin
+   PContext3DMaterial(@inherited CurrentOpacity).FCurrentMaterialClass := materialClass;
+end;
+
+// ApplyMaterial
+//
+procedure TFMXUContext3D.ApplyMaterial(const material: TMaterial; const opacity: Single);
+
+   procedure InnerApplyMaterial;
+   begin
+      var material := CurrentMaterial;
+      CurrentMaterialClass := TMaterialClass(Material.ClassType);
+      material.Apply(Self);
+      if material.GetMaterialProperty(TMaterial.TProperty.ModelViewProjection) <> '' then
+         SetShaderVariable(material.GetMaterialProperty(TMaterial.TProperty.ModelViewProjection), CurrentModelViewProjectionMatrix);
+      if material.GetMaterialProperty(TMaterial.TProperty.ModelView) <> '' then
+         SetShaderVariable(material.GetMaterialProperty(TMaterial.TProperty.ModelView), CurrentMatrix);
+      if material.GetMaterialProperty(TMaterial.TProperty.ModelViewInverseTranspose) <> '' then begin
+         var M := CurrentMatrix.Inverse.Transpose;
+         SetShaderVariable(material.GetMaterialProperty(TMaterial.TProperty.ModelViewInverseTranspose), M);
+      end;
+   end;
+
+begin
+   CurrentOpacity := opacity;
+   if material <> nil then
+      CurrentMaterial := material
+   else begin
+      CurrentMaterial := DefaultMaterial;
+      if CurrentMaterial is TColorMaterial then
+         TColorMaterial(CurrentMaterial).Color := ColorComposeAlpha(claRed, opacity);
+   end;
+   if CurrentMaterial <> nil then
+      InnerApplyMaterial;
+end;
+
+// ResetMaterial
+//
+procedure TFMXUContext3D.ResetMaterial;
+begin
+   if CurrentMaterial <> nil then
+      CurrentMaterial.Reset(Self);
+end;
+
+// AddResource
+//
+class function TFMXUContext3D.AddResource(const aResource : IInterface) : THandle;
+begin
+   // this implementation maps FMX behavior of the handle being an index in the list
+   // should probably be changed to use meaningless handles, but I'm unsure of side-effects yet
+   for var i := 1 to High(vResourceList) do begin
+      if vResourceList[i] = nil then begin
+         vResourceList[i] := aResource;
+         Exit(i);
+      end;
+   end;
+
+   Result := Length(vResourceList);
+   if Result = 0 then
+      Result := 1; // handle 0 is invalid, leave a hole
+   SetLength(vResourceList, Result + 1);
+   vResourceList[Result] := aResource;
+end;
+
+// GetResource
+//
+class function TFMXUContext3D.GetResource(aResourceHandle : THandle) : IInterface;
+begin
+   if aResourceHandle > 0 then begin
+      Assert(Cardinal(aResourceHandle) < Cardinal(Length(vResourceList)));
+      Result := vResourceList[aResourceHandle];
+      Assert(Result <> nil);
+   end else Result := nil;
+end;
+
+// RemoveResource
+//
+class procedure TFMXUContext3D.RemoveResource(aResourceHandle : THandle);
+begin
+   if (aResourceHandle > 0) and not vContextFinalized then begin
+      Assert(Cardinal(aResourceHandle) < Cardinal(Length(vResourceList)));
+      Assert(vResourceList[aResourceHandle] <> nil);
+      vResourceList[aResourceHandle] := nil;
+   end;
+end;
+
+// ------------------
+// ------------------ TFMXUContext3DHelper ------------------
+// ------------------
+
+// ApplyMaterial
+//
+procedure TFMXUContext3DHelper.ApplyMaterial(const material: TMaterial; const opacity: Single);
+begin
+   GetFMXUContext.ApplyMaterial(material, opacity);
+end;
+
+// ResetMaterial
+//
+procedure TFMXUContext3DHelper.ResetMaterial;
+begin
+   GetFMXUContext.ResetMaterial;
+end;
+
+// DrawGPUPrimitives
+//
+procedure TFMXUContext3DHelper.DrawGPUPrimitives(
+   const aKind : TPrimitivesKindU;
+   const vertices : TGPUVertexBuffer; const indices : TGPUIndexBuffer
+   );
+begin
+   GetFMXUContext.DrawGPUPrimitives(aKind, vertices, indices);
+end;
+
+// DrawPrimitives
+//
+procedure TFMXUContext3DHelper.DrawPrimitives(const aKind : TPrimitivesKind; const vertices : TGPUVertexBuffer; const indices : TGPUIndexBuffer; const material : TMaterial; const opacity : Single);
+begin
+   if SupportsGPUPrimitives then begin
+      ApplyMaterial(material, opacity);
+      DrawGPUPrimitives(TPrimitivesKindU(aKind), vertices, indices);
+      ResetMaterial;
+   end else begin
+      var vb := vertices.Lock(Self);
+      try
+         var ib := indices.Lock(Self);
+         try
+            case aKind of
+               TPrimitivesKind.Points : inherited DrawPoints(vb, ib, material, opacity);
+               TPrimitivesKind.Lines : inherited DrawLines(vb, ib, material, opacity);
+               TPrimitivesKind.Triangles : inherited DrawTriangles(vb, ib, material, opacity);
+            else
+               Assert(False);
+            end;
+         finally
+            indices.UnLock(Self);
+         end;
+      finally
+         vertices.Unlock(Self);
+      end;
+   end;
+end;
+
+// DrawTriangles
+//
+procedure TFMXUContext3DHelper.DrawTriangles(const vertices : TGPUVertexBuffer; const indices : TGPUIndexBuffer; const material : TMaterial; const opacity : Single);
+begin
+   DrawPrimitives(TPrimitivesKind.Triangles, vertices, indices, material, opacity);
+end;
+
+// DrawLines
+//
+procedure TFMXUContext3DHelper.DrawLines(const vertices : TGPUVertexBuffer; const indices : TGPUIndexBuffer; const material : TMaterial; const opacity : Single);
+begin
+   DrawPrimitives(TPrimitivesKind.Lines, vertices, indices, material, opacity);
+end;
+
+// DrawPoints
+//
+procedure TFMXUContext3DHelper.DrawPoints(const vertices : TGPUVertexBuffer; const indices : TGPUIndexBuffer; const material : TMaterial; const opacity : Single);
+begin
+   DrawPrimitives(TPrimitivesKind.Points, vertices, indices, material, opacity);
+end;
+
+// SupportsGPUPrimitives
+//
+function TFMXUContext3DHelper.SupportsGPUPrimitives : Boolean;
+begin
+   Result := Self is TFMXUContext3D;
+end;
+
+// GetFMXUContext
+//
+function TFMXUContext3DHelper.GetFMXUContext : TFMXUContext3D;
+begin
+   Assert(Self is TFMXUContext3D);
+   Result := TFMXUContext3D(Self);
+end;
+
+// ------------------
+// ------------------ TIContextShaderSource ------------------
+// ------------------
+
+// Create
+//
+constructor TIContextShaderSource.Create(const aSource : TContextShaderSource; minVariableSlotSize : Integer);
+begin
+   inherited Create;
+   FSource := aSource;
+   FVariablesSize := 0;
+   for var i := 0 to High(Variables) do begin
+      var size := Variables[i].Size;
+      if size < minVariableSlotSize then
+         Inc(FVariablesSize, minVariableSlotSize)
+      else Inc(FVariablesSize, size);
+   end;
+end;
+
+// GetSelf
+//
+function TIContextShaderSource.GetSelf : TIContextShaderSource;
+begin
+   Result := Self;
+end;
+
+// GetVariablesSize
+//
+function TIContextShaderSource.GetVariablesSize : Integer;
+begin
+   Result := FVariablesSize;
+end;
+
+// GetUserData
+//
+function TIContextShaderSource.GetUserData : IInterface;
+begin
+   Result := FUserData;
+end;
+
+// ------------------------------------------------------------------
+// ------------------------------------------------------------------
+// ------------------------------------------------------------------
+initialization
+// ------------------------------------------------------------------
+// ------------------------------------------------------------------
+// ------------------------------------------------------------------
+
+finalization
+
+   vContextFinalized := True;
 
 end.
 
