@@ -13,7 +13,7 @@
 {    Vertex & Index buffer related utilities                           }
 {                                                                      }
 {**********************************************************************}
-unit FMXU.VertexBuffer;
+unit FMXU.Buffers;
 
 {$i fmxu.inc}
 
@@ -33,6 +33,76 @@ type
       constructor CreateFromVertexBuffer(vb : TVertexBuffer);
    end;
 
+   TGPUBufferType = (
+      gpubtDynamic,  // maps to a shared CPU + GPU buffer
+      gpubtStatic    // uses a CPU buffer on Lock that is copied on UnLock to a GPU buffer
+   );
+
+   TGPUBufferBase = class
+      protected
+         FGPUBuffer : IInterface;
+         FLockCount : Integer;
+         FBufferType : TGPUBufferType;
+
+         procedure DoLock(context : TContext3D); virtual;
+         procedure DoUnlock(context : TContext3D); virtual;
+
+      public
+         destructor Destroy; override;
+
+         procedure Unlock(context : TContext3D);
+
+         property BufferType : TGPUBufferType read FBufferType;
+         property GPUBuffer : IInterface read FGPUBuffer;
+         property LockCount : Integer read FLockCount;
+
+   end;
+
+   TGPUVertexBufferClass = class of TGPUVertexBuffer;
+   TGPUVertexBuffer = class (TGPUBufferBase)
+      private class var
+         vTGPUVertexBufferClass : TGPUVertexBufferClass;
+
+      protected
+         FVertexBuffer : TVertexBuffer;
+         FVertexDeclaration : TVertexDeclaration;
+
+         constructor DoCreate(const aFormat: TVertexFormats; const aLength: Integer; aType : TGPUBufferType); virtual;
+
+      public
+         class function Create(const aFormat: TVertexFormats; const aLength: Integer; aType : TGPUBufferType) : TGPUVertexBuffer; virtual;
+         destructor Destroy; override;
+         class procedure RegisterGPUVertexBufferClass(const aClass : TGPUVertexBufferClass);
+
+         function Lock(context : TContext3D) : TVertexBuffer;
+
+         function VertexSize : Cardinal;
+         property VertexDeclarations : TVertexDeclaration read FVertexDeclaration;
+         function Length : Integer;
+   end;
+
+   TGPUIndexBufferClass = class of TGPUIndexBuffer;
+   TGPUIndexBuffer = class (TGPUBufferBase)
+      private class var
+         vTGPUIndexBufferClass : TGPUIndexBufferClass;
+
+      protected
+         FIndexBuffer : TIndexBuffer;
+
+         constructor DoCreate(const aFormat: TIndexFormat; const aLength: Integer; aType : TGPUBufferType); virtual;
+
+      public
+         class function Create(const aFormat: TIndexFormat; const aLength: Integer; aType : TGPUBufferType) : TGPUIndexBuffer;
+         destructor Destroy; override;
+
+         class procedure RegisterGPUIndexBufferClass(const aClass : TGPUIndexBufferClass);
+
+         function Lock(context : TContext3D) : TIndexBuffer;
+
+         function IndexSize : Cardinal;
+         function Length : Integer;
+   end;
+
 //: Compute barycenter of the vertex buffer
 function BufferBarycenter(const buf : TVertexBuffer) : TPoint3D;
 //: Compute average distance of vertex buffer points to a given point
@@ -45,6 +115,10 @@ procedure BufferOffsetAndScale(const buf : TVertexBuffer; const offset : TPoint3
 
 //: Fill the indexbuffer with a sequence
 procedure IndexBufferSetSequence(buf : TIndexBuffer; base, increment : Integer);
+
+procedure SetIndexQuadSequence_UInt16(buffer : Pointer; nbQuads : Integer);
+procedure SetIndexQuadSequence_UInt32(buffer : Pointer; nbQuads : Integer);
+
 {: Create and fill an index buffer with quad indexes for a triangles vertex buffer
    The vertex buffer should hold a sequence of the 4 vertices of each quad }
 function CreateIndexBufferQuadSequence(nbQuads : Integer) : TIndexBuffer;
@@ -190,47 +264,63 @@ begin
    end;
 end;
 
-// CreateIndexBufferQuadSequence
+// SetIndexQuadSequence_UInt16
 //
-function CreateIndexBufferQuadSequence(nbQuads : Integer) : TIndexBuffer;
+procedure SetIndexQuadSequence_UInt16(buffer : Pointer; nbQuads : Integer);
 type
    TWord6 = array [0..5] of Word;
    PWord6 = ^TWord6;
+begin
+   Assert(nbQuads < 65536 div 4, 'Too many quads for UInt16');
+   var pIndices : PWord6 := buffer;
+   var k := 0;
+   for var i := 1 to nbQuads do begin
+      {$IFOPT R+}{$DEFINE RANGEON}{$R-}{$ELSE}{$UNDEF RANGEON}{$ENDIF}
+      pIndices[0] := k+0;
+      pIndices[1] := k+1;
+      pIndices[2] := k+2;
+      pIndices[3] := k+0;
+      pIndices[4] := k+2;
+      pIndices[5] := k+3;
+      {$IFDEF RANGEON}{$R+}{$UNDEF RANGEON}{$ENDIF}
+      Inc(pIndices);
+      Inc(k, 4);
+   end;
+end;
+
+// SetIndexQuadSequence_UInt32
+//
+procedure SetIndexQuadSequence_UInt32(buffer : Pointer; nbQuads : Integer);
+type
    TDWord6 = array [0..5] of UInt32;
    PDWord6 = ^TDWord6;
 begin
-   if nbQuads > 65536 div 4 then begin
+   var pIndices : PDWord6 := buffer;
+   var k := 0;
+   for var i := 1 to nbQuads do begin
+      {$IFOPT R+}{$DEFINE RANGEON}{$R-}{$ELSE}{$UNDEF RANGEON}{$ENDIF}
+      pIndices[0] := k+0;
+      pIndices[1] := k+1;
+      pIndices[2] := k+2;
+      pIndices[3] := k+0;
+      pIndices[4] := k+2;
+      pIndices[5] := k+3;
+      {$IFDEF RANGEON}{$R+}{$UNDEF RANGEON}{$ENDIF}
+      Inc(pIndices);
+      Inc(k, 4);
+   end;
+end;
+
+// CreateIndexBufferQuadSequence
+//
+function CreateIndexBufferQuadSequence(nbQuads : Integer) : TIndexBuffer;
+begin
+   if nbQuads >= 65536 div 4 then begin
       Result := TIndexBuffer.Create(nbQuads*6, TIndexFormat.UInt32);
-      var pIndices : PDWord6 := Result.Buffer;
-      var k := 0;
-      for var i := 1 to nbQuads do begin
-         {$IFOPT R+}{$DEFINE RANGEON}{$R-}{$ELSE}{$UNDEF RANGEON}{$ENDIF}
-         pIndices[0] := k+0;
-         pIndices[1] := k+1;
-         pIndices[2] := k+2;
-         pIndices[3] := k+0;
-         pIndices[4] := k+2;
-         pIndices[5] := k+3;
-         {$IFDEF RANGEON}{$R+}{$UNDEF RANGEON}{$ENDIF}
-         Inc(pIndices);
-         Inc(k, 4);
-      end;
+      SetIndexQuadSequence_UInt32(Result.Buffer, nbQuads);
    end else begin
       Result := TIndexBuffer.Create(nbQuads*6, TIndexFormat.UInt16);
-      var pIndices : PWord6 := Result.Buffer;
-      var k := 0;
-      for var i := 1 to nbQuads do begin
-         {$IFOPT R+}{$DEFINE RANGEON}{$R-}{$ELSE}{$UNDEF RANGEON}{$ENDIF}
-         pIndices[0] := k+0;
-         pIndices[1] := k+1;
-         pIndices[2] := k+2;
-         pIndices[3] := k+0;
-         pIndices[4] := k+2;
-         pIndices[5] := k+3;
-         {$IFDEF RANGEON}{$R+}{$UNDEF RANGEON}{$ENDIF}
-         Inc(pIndices);
-         Inc(k, 4);
-      end;
+      SetIndexQuadSequence_UInt16(Result.Buffer, nbQuads);
    end;
 end;
 
@@ -312,5 +402,164 @@ begin
    {$IFDEF RANGEON}{$R+}{$UNDEF RANGEON}{$ENDIF}
 end;
 {$endif}
+
+// ------------------
+// ------------------ TGPUBufferBase ------------------
+// ------------------
+
+// DoLock
+//
+procedure TGPUBufferBase.DoLock(context : TContext3D);
+begin
+   // empty
+end;
+
+// DoUnlock
+//
+procedure TGPUBufferBase.DoUnlock(context : TContext3D);
+begin
+   // empty
+end;
+
+// Destroy
+//
+destructor TGPUBufferBase.Destroy;
+begin
+   Assert(FLockCount = 0, 'TGPUBuffer is still locked!');
+   inherited;
+end;
+
+// Unlock
+//
+procedure TGPUBufferBase.Unlock(context : TContext3D);
+begin
+   Assert(FLockCount > 0);
+   Dec(FLockCount);
+   if FLockCount = 0 then
+      DoUnlock(context);
+end;
+
+// ------------------
+// ------------------ TGPUVertexBuffer ------------------
+// ------------------
+
+// DoCreate
+//
+constructor TGPUVertexBuffer.DoCreate(const aFormat: TVertexFormats; const aLength: Integer; aType : TGPUBufferType);
+begin
+   inherited Create;
+   FVertexBuffer := TVertexBuffer.Create(aFormat, aLength);
+   FBufferType := aType;
+   FVertexDeclaration := FVertexBuffer.GetVertexDeclarations;
+end;
+
+// Create
+//
+class function TGPUVertexBuffer.Create(const aFormat: TVertexFormats; const aLength: Integer; aType : TGPUBufferType) : TGPUVertexBuffer;
+begin
+   if vTGPUVertexBufferClass <> nil then
+      Result := vTGPUVertexBufferClass.DoCreate(aFormat, aLength, aType)
+   else Result := TGPUVertexBuffer.DoCreate(aFormat, aLength, aType);
+end;
+
+// Destroy
+//
+destructor TGPUVertexBuffer.Destroy;
+begin
+   inherited;
+   FreeAndNil(FVertexBuffer);
+end;
+
+// RegisterGPUVertexBufferClass
+//
+class procedure TGPUVertexBuffer.RegisterGPUVertexBufferClass(const aClass : TGPUVertexBufferClass);
+begin
+   vTGPUVertexBufferClass := aClass;
+end;
+
+// Lock
+//
+function TGPUVertexBuffer.Lock(context : TContext3D) : TVertexBuffer;
+begin
+   Inc(FLockCount);
+   if FLockCount = 1 then
+      DoLock(context);
+   Result := FVertexBuffer;
+end;
+
+// VertexSize
+//
+function TGPUVertexBuffer.VertexSize : Cardinal;
+begin
+   Result := FVertexBuffer.VertexSize;
+end;
+
+// Length
+//
+function TGPUVertexBuffer.Length : Integer;
+begin
+   Result := FVertexBuffer.Length;
+end;
+
+// ------------------
+// ------------------ TGPUIndexBuffer ------------------
+// ------------------
+
+// Create
+//
+constructor TGPUIndexBuffer.DoCreate(const aFormat: TIndexFormat; const aLength: Integer; aType : TGPUBufferType);
+begin
+   inherited Create;
+   FIndexBuffer := TIndexBuffer.Create(aLength, aFormat);
+   FBufferType := aType;
+end;
+
+// Create
+//
+class function TGPUIndexBuffer.Create(const aFormat: TIndexFormat; const aLength: Integer; aType : TGPUBufferType) : TGPUIndexBuffer;
+begin
+   if vTGPUIndexBufferClass <> nil then
+      Result := vTGPUIndexBufferClass.DoCreate(aFormat, aLength, aType)
+   else Result := TGPUIndexBuffer.DoCreate(aFormat, aLength, aType);
+end;
+
+// Destroy
+//
+destructor TGPUIndexBuffer.Destroy;
+begin
+   inherited;
+   FreeAndNil(FIndexBuffer);
+end;
+
+// RegisterGPUIndexBufferClass
+//
+class procedure TGPUIndexBuffer.RegisterGPUIndexBufferClass(const aClass : TGPUIndexBufferClass);
+begin
+   vTGPUIndexBufferClass := aClass;
+end;
+
+// Lock
+//
+function TGPUIndexBuffer.Lock(context : TContext3D) : TIndexBuffer;
+begin
+   Inc(FLockCount);
+   if FLockCount = 1 then
+      DoLock(context);
+   Result := FIndexBuffer;
+end;
+
+// IndexSize
+//
+function TGPUIndexBuffer.IndexSize : Cardinal;
+begin
+   Result := FIndexBuffer.IndexSize;
+end;
+
+// Length
+//
+function TGPUIndexBuffer.Length : Integer;
+begin
+   Result := FIndexBuffer.Length;
+end;
 
 end.
