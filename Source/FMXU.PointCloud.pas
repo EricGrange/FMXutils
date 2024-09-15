@@ -15,21 +15,29 @@
 {**********************************************************************}
 unit FMXU.PointCloud;
 
-{$i fmxu.inc}
+{.$i fmxu.inc}
 
 interface
 
 uses
    System.Classes, System.SysUtils, System.Math.Vectors, System.RTLConsts,
-   FMX.Types3D, FMX.Controls3D, FMXU.Material.PointColor;
+   FMX.Types3D, FMX.Controls3D,
+   FMXU.Material.PointColor, FMXU.Buffers;
+
+{$define use_gpu_buffers}
 
 type
    {: Render a 3D point cloud  }
    TPointCloud3D = class (TControl3D)
       private
          FPoints : TVertexBuffer;
+         {$ifdef use_gpu_buffers}
+         FQuads : TGPUVertexBuffer;
+         {$else}
          FQuads : TVertexBuffer;
+         {$endif}
          FIndices : TIndexBuffer;
+         FGPUIndices : TGPUIndexBuffer;
          FMaterialSource : TPointColorMaterialSource;
          FPointSize : Single;
 
@@ -72,7 +80,7 @@ implementation
 // ------------------------------------------------------------------
 // ------------------------------------------------------------------
 
-uses FMXU.VertexBuffer;
+uses FMXU.Context, FMUX.Introsort;
 
 type
    TPointRecord = packed record
@@ -150,6 +158,7 @@ procedure TPointCloud3D.ClearQuads;
 begin
    FreeAndNil(FQuads);
    FreeAndNil(FIndices);
+   FreeAndNil(FGPUIndices);
 end;
 
 // NeedDepthSorting
@@ -207,7 +216,6 @@ var
          minIndex := i;
       until i >= maxIndex;
    end;
-
 begin
    // compute depth of all points using camera matrix Z
    var mvp := Context.CurrentModelViewProjectionMatrix;
@@ -221,6 +229,7 @@ begin
          depthVector, depthBuffer
       );
       vertexBuf := Points.Buffer;
+
       QuickSort(0, Points.Length-1);
    finally
       FreeMem(depthBuffer);
@@ -230,30 +239,48 @@ end;
 
 // PointsToQuads
 //
-procedure TPointCloud3D.PointsToQuads;
-begin
-   var pPoints : PPointRecord := Points.Buffer;
-   var pQuads : PPointRecord4 := FQuads.Buffer;
-   var cDelta32 : UInt64 := $40000000;
-   var cDelta64 := cDelta32 shl 32;
-   var cMask := $00FFFFFF_FFFFFFFF;
-   {$IFOPT R+}{$DEFINE RANGEON}{$R-}{$ELSE}{$UNDEF RANGEON}{$ENDIF}
-   for var j := 1 to Points.Length do begin
-      var d0 := pPoints.Data64[0];
-      var d1 := pPoints.Data64[1] and cMask;
-      pQuads[0].Data64[0] := d0;    pQuads[0].Data64[1] := d1;  Inc(d1, cDelta64);
-      pQuads[1].Data64[0] := d0;    pQuads[1].Data64[1] := d1;  Inc(d1, cDelta64);
-      pQuads[2].Data64[0] := d0;    pQuads[2].Data64[1] := d1;  Inc(d1, cDelta64);
-      pQuads[3].Data64[0] := d0;    pQuads[3].Data64[1] := d1;
 
-//      pQuads[0].V := pPoints.V; pQuads[0].C := c; Inc(c, cDelta);
-//      pQuads[1].V := pPoints.V; pQuads[1].C := c; Inc(c, cDelta);
-//      pQuads[2].V := pPoints.V; pQuads[2].C := c; Inc(c, cDelta);
-//      pQuads[3].V := pPoints.V; pQuads[3].C := c;
-      Inc(pQuads);
-      Inc(pPoints);
+// PointsToQuads
+//
+procedure TPointCloud3D.PointsToQuads;
+
+   procedure Process(quadsBuffer : TVertexBuffer);
+   begin
+      var pPoints : PPointRecord := Points.Buffer;
+      var pQuads : PPointRecord4 := quadsBuffer.Buffer;
+      var cDelta32 : UInt64 := $40000000;
+      var cDelta64 := cDelta32 shl 32;
+      var cMask := $00FFFFFF_FFFFFFFF;
+      {$IFOPT R+}{$DEFINE RANGEON}{$R-}{$ELSE}{$UNDEF RANGEON}{$ENDIF}
+      for var j := 1 to Points.Length do begin
+         var d0 := pPoints.Data64[0];
+         var d1 := pPoints.Data64[1] and cMask;
+         pQuads[0].Data64[0] := d0;    pQuads[0].Data64[1] := d1;  Inc(d1, cDelta64);
+         pQuads[1].Data64[0] := d0;    pQuads[1].Data64[1] := d1;  Inc(d1, cDelta64);
+         pQuads[2].Data64[0] := d0;    pQuads[2].Data64[1] := d1;  Inc(d1, cDelta64);
+         pQuads[3].Data64[0] := d0;    pQuads[3].Data64[1] := d1;
+
+   //      pQuads[0].V := pPoints.V; pQuads[0].C := c; Inc(c, cDelta);
+   //      pQuads[1].V := pPoints.V; pQuads[1].C := c; Inc(c, cDelta);
+   //      pQuads[2].V := pPoints.V; pQuads[2].C := c; Inc(c, cDelta);
+   //      pQuads[3].V := pPoints.V; pQuads[3].C := c;
+         Inc(pQuads);
+         Inc(pPoints);
+      end;
+      {$IFDEF RANGEON}{$R+}{$UNDEF RANGEON}{$ENDIF}
    end;
-   {$IFDEF RANGEON}{$R+}{$UNDEF RANGEON}{$ENDIF}
+
+begin
+   {$ifdef use_gpu_buffers}
+   var quadsBuffer := FQuads.Lock(Context);
+   try
+      Process(quadsBuffer);
+   finally
+      FQuads.Unlock(Context);
+   end;
+   {$else}
+   Process(FQuads);
+   {$endif}
 end;
 
 // UpdatePoints
@@ -278,18 +305,26 @@ begin
       Exit;
    end;
 
+   {$ifdef use_gpu_buffers}
+   FQuads := TGPUVertexBuffer.Create([ TVertexFormat.Vertex, TVertexFormat.Color0 ], Points.Length*4, gpubtStatic);
+   {$else}
    FQuads := TVertexBuffer.Create([ TVertexFormat.Vertex, TVertexFormat.Color0 ], Points.Length*4);
-
+   {$endif}
    PointsToQuads;
 
    FIndices := CreateIndexBufferQuadSequence(Points.Length);
+   {$ifdef use_gpu_buffers}
+   FGPUIndices := TGPUIndexBuffer.Create(FIndices.Format, FIndices.Length, gpubtStatic);
+   Move(FIndices.Buffer^, FGPUIndices.Lock(Context).Buffer^, FIndices.Size);
+   FGPUIndices.Unlock(Context);
+   {$endif}
 end;
 
 // Render
 //
 procedure TPointCloud3D.Render;
 begin
-   if FIndices = nil then
+   if (FIndices = nil) and (FGPUIndices = nil) then
       UpdatePoints
    else if NeedDepthSorting then begin
       DepthSortPoints;
@@ -315,7 +350,17 @@ begin
    var opa := AbsoluteOpacity;
    if PointShape = pcsPoint then
       Context.DrawPoints(FPoints, FIndices, mat, opa)
-   else Context.DrawTriangles(FQuads, FIndices, mat, opa);
+   else begin
+      {$ifdef use_gpu_buffers}
+      if Context.SupportsGPUPrimitives then begin
+         Context.ApplyMaterial(mat, opa);
+         Context.DrawGPUPrimitives(TPrimitivesKindU.Triangles, FQuads, FGPUIndices);
+         Context.ResetMaterial;
+      end else Context.DrawTriangles(FQuads, FGPUIndices, mat, opa);
+      {$else}
+      Context.DrawTriangles(FQuads, FIndices, mat, opa);
+      {$endif}
+   end;
 
    context.PopContextStates;
 end;
