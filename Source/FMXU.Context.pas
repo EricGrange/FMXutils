@@ -130,6 +130,9 @@ function CreateContextShader(
    const variableKinds : array of TContextShaderVariableKind
    ) : TContextShader;
 
+function MultisampleToSampleCount(const aMultisample : TMultisample) : Integer;
+function SampleCountToMultisample(const count : Integer) : TMultisample;
+
 // ------------------------------------------------------------------
 // ------------------------------------------------------------------
 // ------------------------------------------------------------------
@@ -317,6 +320,34 @@ begin
 
    Result := TContextShader.Create;
    Result.LoadFromData('', kind, '', source);
+end;
+
+// MultisampleToSampleCount
+//
+function MultisampleToSampleCount(const aMultisample : TMultisample) : Integer;
+begin
+   case aMultisample of
+      TMultisample.None: Result := 0;
+      TMultisample.TwoSamples: Result := 2;
+      TMultisample.FourSamples: Result := 4;
+   else
+      Result := 0;
+      Assert(False);
+   end;
+end;
+
+// SampleCountToMultisample
+//
+function SampleCountToMultisample(const count : Integer) : TMultisample;
+begin
+   case count of
+      0, 1 : Result := TMultisample.None;
+      2 : Result := TMultisample.TwoSamples;
+      4 : Result := TMultisample.FourSamples;
+   else
+      Result := TMultisample.None;
+      Assert(False);
+   end;
 end;
 
 // ------------------
