@@ -29,7 +29,7 @@ uses
 type
    TD3D11_INPUT_ELEMENT_DESC_Array = array of TD3D11_INPUT_ELEMENT_DESC;
 
-   // holds Device & Dontext, typically a singleton
+   // holds Device & Context, typically a singleton
    TDX11Device = class
       protected
          FDevice : ID3D11Device;
