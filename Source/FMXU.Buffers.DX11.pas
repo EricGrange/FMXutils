@@ -244,9 +244,9 @@ begin
       gpubtStatic : begin
 
          buffer := fmxuContext.CreateBufferFromData(
-            FIndexBuffer.Size, D3D11_BIND_VERTEX_BUFFER,
+            FIndexBuffer.Size, D3D11_BIND_INDEX_BUFFER,
             D3D11_USAGE_IMMUTABLE, 0,
-            TIndexBufferCracker(FIndexBuffer).FBuffer
+            FIndexBuffer.Buffer
          );
          FGPUBuffer := buffer;
 
