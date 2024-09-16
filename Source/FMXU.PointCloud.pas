@@ -80,7 +80,7 @@ implementation
 // ------------------------------------------------------------------
 // ------------------------------------------------------------------
 
-uses FMXU.Context, FMUX.Introsort;
+uses FMXU.Context;
 
 type
    TPointRecord = packed record
@@ -306,7 +306,7 @@ begin
    end;
 
    {$ifdef use_gpu_buffers}
-   FQuads := TGPUVertexBuffer.Create([ TVertexFormat.Vertex, TVertexFormat.Color0 ], Points.Length*4, gpubtStatic);
+   FQuads := TGPUVertexBuffer.Create([ TVertexFormat.Vertex, TVertexFormat.Color0 ], Points.Length*4, gpubtDynamic);
    {$else}
    FQuads := TVertexBuffer.Create([ TVertexFormat.Vertex, TVertexFormat.Color0 ], Points.Length*4);
    {$endif}
@@ -314,7 +314,7 @@ begin
 
    FIndices := CreateIndexBufferQuadSequence(Points.Length);
    {$ifdef use_gpu_buffers}
-   FGPUIndices := TGPUIndexBuffer.Create(FIndices.Format, FIndices.Length, gpubtStatic);
+   FGPUIndices := TGPUIndexBuffer.Create(FIndices.Format, FIndices.Length, gpubtDynamic);
    Move(FIndices.Buffer^, FGPUIndices.Lock(Context).Buffer^, FIndices.Size);
    FGPUIndices.Unlock(Context);
    {$endif}
