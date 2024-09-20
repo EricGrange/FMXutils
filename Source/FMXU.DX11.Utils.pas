@@ -254,6 +254,8 @@ begin
    Result := cMap[ primitive ];
 end;
 
+// PrimitiveKindToDX11Topology
+//
 function PrimitiveKindToDX11Topology(primitive : TPrimitivesKind) : D3D11_PRIMITIVE_TOPOLOGY;
 begin
    Result := PrimitiveKindUToDX11Topology(TPrimitivesKindU(primitive));
