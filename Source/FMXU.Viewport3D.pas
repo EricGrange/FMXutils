@@ -24,7 +24,7 @@ interface
 
 uses
    System.Classes, System.Diagnostics, System.Types,
-   FMX.Viewport3D, FMX.Forms;
+   FMX.Viewport3D, FMX.Forms, FMX.Forms3D;
 
 type
    TForm = class (FMX.Forms.TForm)
@@ -53,6 +53,23 @@ type
       protected
          procedure Paint; override;
          procedure AfterPaint; override;
+
+      public
+         // Number of seconds the last Paint took - hopefully fractions of seconds :)
+         property LastPaintSeconds : Single read FLastPaintSeconds;
+
+         property OnBeforePaint : TNotifyEvent read FOnBeforePaint write FOnBeforePaint;
+         property OnAfterPaint : TNotifyEvent read FOnAfterPaint write FOnAfterPaint;
+   end;
+
+   TForm3D = class (FMX.Forms3D.TForm3D)
+      private
+         FLastPaintSeconds : Single;
+         FOnBeforePaint : TNotifyEvent;
+         FOnAfterPaint : TNotifyEvent;
+
+      protected
+          procedure PaintRects(const UpdateRects: array of TRectF); override;
 
       public
          // Number of seconds the last Paint took - hopefully fractions of seconds :)
@@ -109,6 +126,23 @@ begin
    inherited;
    if Assigned(FOnAfterPaint) then
       FOnAfterPaint(Self);
+end;
+
+// ------------------
+// ------------------ TForm3D ------------------
+// ------------------
+
+// PaintRects
+//
+procedure TForm3D.PaintRects(const UpdateRects: array of TRectF);
+begin
+   var stopWatch := TStopwatch.StartNew;
+   if Assigned(FOnBeforePaint) then
+      FOnBeforePaint(Self);
+   inherited;
+   if Assigned(FOnAfterPaint) then
+      FOnAfterPaint(Self);
+   FLastPaintSeconds := stopWatch.ElapsedTicks / stopWatch.Frequency;
 end;
 
 end.
