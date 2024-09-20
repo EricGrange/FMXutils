@@ -1145,18 +1145,15 @@ procedure TFMXUContext3D_DX11.DoSetShaderVariable(const aName : String; const da
 
    function SetVariable(const iSource : IContextShaderSource; const variables : TBytes) : Boolean;
    begin
-      var source := iSource.GetSelf;
-      for var i := 0 to High(source.Variables) do begin
-         var v : PContextShaderVariable := @source.Variables[i];
-         if SameText(v.Name, aName) then begin
-            var size := SizeOf(data);
-            if size > v.Size then
-               size := v.Size;
-            Move(data[0], variables[v.Index], size);
-            Exit(True);
-         end;
-      end;
-      Result := False;
+      var i := iSource.IndexOfVariable(aName);
+      if i >= 0 then begin
+         var size := SizeOf(data);
+         var vSize := iSource.Size[i];
+         if size > vSize then
+            size := vSize;
+         Move(data[0], variables[iSource.Index[i]], size);
+         Result := True;
+      end else Result := False;
    end;
 
 begin
@@ -1211,13 +1208,11 @@ begin
    if CurrentPixelShader = nil then Exit;
 
    var source : TIContextShaderSource := vPixelShaderSource.GetSelf;
-   for var i := 0 to High(source.Variables) do begin
-      var v : PContextShaderVariable := @source.Variables[i];
-      if SameText(v.Name, aName) then begin
-         SetShaderResource(v.Index);
-         vPixelShaderModified := True;
-         Exit;
-      end;
+   var index := source.IndexOfVariable(aName);
+   if index >= 0 then begin
+      SetShaderResource(index);
+      vPixelShaderModified := True;
+      Exit;
    end;
 
    raise EFMXU_DX11Exception.CreateFmt('Shader variable "%s" not found', [ aName ]);
