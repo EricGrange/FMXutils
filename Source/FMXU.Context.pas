@@ -25,6 +25,12 @@ uses
    FMX.Types3D, FMX.Materials,
    FMXU.Buffers, FMXU.Colors;
 
+{$IFOPT R+}{$DEFINE RANGEON}{$R-}{$ELSE}{$UNDEF RANGEON}{$ENDIF}
+const
+   // extension to TContextShaderArch
+   TContextShaderArch_WGSL : TContextShaderArch = Succ(High(TContextShaderArch));
+{$IFDEF RANGEON}{$R+}{$UNDEF RANGEON}{$ENDIF}
+
 type
    PContextShaderVariable = ^TContextShaderVariable;
 
