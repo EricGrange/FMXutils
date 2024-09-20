@@ -94,25 +94,43 @@ type
       ['{2345E06D-A1F7-437B-97D9-60549EAD26CB}']
       function GetSelf : TIContextShaderSource;
       function GetVariablesSize : Integer;
+      function GetMaxTextureSlot : Integer;
+      function IndexOfVariable(const name : String) : Integer;
+      function GetSize(index : Integer) : Cardinal;
+      function GetIndex(index : Integer) : Cardinal;
       function GetUserData : IInterface;
+
+      function SpecializeForVertexDeclaration(const declaration : TVertexDeclaration) : IContextShaderSource;
+
+      property Size[index : Integer] : Cardinal read GetSize;
+      property Index[index : Integer] : Cardinal read GetIndex;
    end;
    TIContextShaderSource = class(TInterfacedObject, IContextShaderSource)
       protected
          FSource : TContextShaderSource;
          FVariablesSize : Integer;
+         FMaxTextureSlot : Integer;
          FUserData : IInterface;
 
          function GetSelf : TIContextShaderSource;
          function GetVariablesSize : Integer;
+         function GetMaxTextureSlot : Integer;
          function GetUserData : IInterface;
 
       public
          constructor Create(const aSource : TContextShaderSource; minVariableSlotSize : Integer);
 
+         function IndexOfVariable(const name : String) : Integer;
+         function GetSize(index : Integer) : Cardinal;
+         function GetIndex(index : Integer) : Cardinal;
+
+         function SpecializeForVertexDeclaration(const declaration : TVertexDeclaration) : IContextShaderSource; virtual;
+
          property Source : TContextShaderSource read FSource;
          property Code : TContextShaderCode read FSource.Code;
          property Variables : TContextShaderVariables read FSource.Variables;
          property VariablesSize : Integer read FVariablesSize;
+         property MaxTextureSlot : Integer read FMaxTextureSlot;
          property UserData : IInterface read FUserData write FUserData;
    end;
 
@@ -327,7 +345,7 @@ end;
 function MultisampleToSampleCount(const aMultisample : TMultisample) : Integer;
 begin
    case aMultisample of
-      TMultisample.None: Result := 0;
+      TMultisample.None: Result := 1;
       TMultisample.TwoSamples: Result := 2;
       TMultisample.FourSamples: Result := 4;
    else
@@ -590,12 +608,55 @@ begin
    inherited Create;
    FSource := aSource;
    FVariablesSize := 0;
+   FMaxTextureSlot := -1;
    for var i := 0 to High(Variables) do begin
-      var size := Variables[i].Size;
-      if size < minVariableSlotSize then
-         Inc(FVariablesSize, minVariableSlotSize)
-      else Inc(FVariablesSize, size);
+      case Variables[i].Kind of
+         TContextShaderVariableKind.Float .. TContextShaderVariableKind.Matrix : begin
+            var size := Variables[i].Size;
+            if size < minVariableSlotSize then
+               Inc(FVariablesSize, minVariableSlotSize)
+            else Inc(FVariablesSize, size);
+         end;
+         TContextShaderVariableKind.Texture : begin
+            if Variables[i].Index > FMaxTextureSlot then
+               FMaxTextureSlot := Variables[i].Index;
+         end;
+      else
+         Assert(False);
+      end;
    end;
+end;
+
+// IndexOfVariable
+//
+function TIContextShaderSource.IndexOfVariable(const name : String) : Integer;
+begin
+   for var i := 0 to High(Variables) do begin
+      if SameText(Variables[i].Name, name) then
+         Exit(i);
+   end;
+   Result := -1;
+end;
+
+// GetSize
+//
+function TIContextShaderSource.GetSize(index : Integer) : Cardinal;
+begin
+   Result := Variables[index].Size;
+end;
+
+// GetIndex
+//
+function TIContextShaderSource.GetIndex(index : Integer) : Cardinal;
+begin
+   Result := Variables[index].Index;
+end;
+
+// SpecializeForVertexDeclaration
+//
+function TIContextShaderSource.SpecializeForVertexDeclaration(const declaration : TVertexDeclaration) : IContextShaderSource;
+begin
+   Result := Self;
 end;
 
 // GetSelf
@@ -610,6 +671,13 @@ end;
 function TIContextShaderSource.GetVariablesSize : Integer;
 begin
    Result := FVariablesSize;
+end;
+
+// GetMaxTextureSlot
+//
+function TIContextShaderSource.GetMaxTextureSlot : Integer;
+begin
+   Result := FMaxTextureSlot;
 end;
 
 // GetUserData
