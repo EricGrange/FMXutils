@@ -102,6 +102,7 @@ type
       function GetVariablesSize : Integer;
       function GetMaxTextureSlot : Integer;
       function IndexOfVariable(const name : String) : Integer;
+      function GetVariablesCount : Integer;
       function GetSize(index : Integer) : Cardinal;
       function GetIndex(index : Integer) : Cardinal;
       function GetUserData : IInterface;
@@ -127,6 +128,7 @@ type
          constructor Create(const aSource : TContextShaderSource; minVariableSlotSize : Integer);
 
          function IndexOfVariable(const name : String) : Integer;
+         function GetVariablesCount : Integer;
          function GetSize(index : Integer) : Cardinal;
          function GetIndex(index : Integer) : Cardinal;
 
@@ -202,6 +204,10 @@ begin
       vContextShaderArch := TContextShaderArch.Metal;
       vContextShaderSimplifiedArch := TContextShaderArch.Metal;
       vShaderIndexBase := 1;
+   end else if Pos('WebGPU', contextClassName) > 0 then begin
+      vContextShaderArch := TContextShaderArch_WGSL;
+      vContextShaderSimplifiedArch := TContextShaderArch_WGSL;
+      vShaderIndexBase := 0;
    end else begin
       raise EContext3DException.CreateFmt(
          'Unsupported context class "%s"', [ contextClassName ]
@@ -256,8 +262,12 @@ begin
             TContextShaderArch.DX11 :
                Result := 64;
          else
-            Result := 0;
-            Assert(False, 'TODO');
+            if vContextShaderSimplifiedArch = TContextShaderArch_WGSL then
+               Result := 64
+            else begin
+               Result := 0;
+               Assert(False, 'TODO');
+            end;
          end;
       TContextShaderVariableKind.Vector :
          case vContextShaderSimplifiedArch of
@@ -266,8 +276,12 @@ begin
             TContextShaderArch.DX11 :
                Result := 16;
          else
-            Result := 0;
-            Assert(False, 'TODO');
+            if vContextShaderSimplifiedArch = TContextShaderArch_WGSL then
+               Result := 16
+            else begin
+               Result := 0;
+               Assert(False, 'TODO');
+            end;
          end;
    else
       Result := 0;
@@ -337,7 +351,10 @@ begin
          System.Move(Pointer(shaderCode)^, Pointer(shaderData)^, Length(shaderCode));
       end;
    else
-      Assert(False);
+      if vContextShaderArch = TContextShaderArch_WGSL then begin
+         SetLength(shaderData, Length(shaderCode));
+         System.Move(Pointer(shaderCode)^, Pointer(shaderData)^, Length(shaderCode));
+      end else Assert(False);
    end;
 
    var source := TContextShaderSource.Create(vContextShaderArch, shaderData, variables);
@@ -642,6 +659,13 @@ begin
          Exit(i);
    end;
    Result := -1;
+end;
+
+// GetVariablesCount
+//
+function TIContextShaderSource.GetVariablesCount : Integer;
+begin
+   Result := Length(Variables);
 end;
 
 // GetSize
