@@ -79,6 +79,7 @@ type
          function VertexSize : Cardinal;
          property VertexDeclarations : TVertexDeclaration read FVertexDeclaration;
          function Length : Integer;
+         function Size : NativeUInt;
    end;
 
    TGPUIndexBufferClass = class of TGPUIndexBuffer;
@@ -101,6 +102,7 @@ type
 
          function IndexSize : Cardinal;
          function Length : Integer;
+         function Size : NativeUInt;
    end;
 
 //: Compute barycenter of the vertex buffer
@@ -501,6 +503,13 @@ begin
    Result := FVertexBuffer.Length;
 end;
 
+// Size
+//
+function TGPUVertexBuffer.Size : NativeUInt;
+begin
+   Result := FVertexBuffer.Size;
+end;
+
 // ------------------
 // ------------------ TGPUIndexBuffer ------------------
 // ------------------
@@ -560,6 +569,13 @@ end;
 function TGPUIndexBuffer.Length : Integer;
 begin
    Result := FIndexBuffer.Length;
+end;
+
+// Size
+//
+function TGPUIndexBuffer.Size : NativeUInt;
+begin
+   Result := FIndexBuffer.Size;
 end;
 
 end.

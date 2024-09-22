@@ -10,7 +10,7 @@
 {    or implied. See the License for the specific language             }
 {    governing rights and limitations under the License.               }
 {                                                                      }
-{    DirectX 11 support utilities                                      }
+{    DirectX 11 hardware buffers                                       }
 {                                                                      }
 {**********************************************************************}
 unit FMXU.Buffers.DX11;
