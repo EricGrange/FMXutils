@@ -71,6 +71,7 @@ type
 
       public
          class function Create(const aFormat: TVertexFormats; const aLength: Integer; aType : TGPUBufferType) : TGPUVertexBuffer; virtual;
+         class function CreateStaticCopy(aVertexBuffer : TVertexBuffer; aContext : TContext3D) : TGPUVertexBuffer;
          destructor Destroy; override;
          class procedure RegisterGPUVertexBufferClass(const aClass : TGPUVertexBufferClass);
 
@@ -94,6 +95,7 @@ type
 
       public
          class function Create(const aFormat: TIndexFormat; const aLength: Integer; aType : TGPUBufferType) : TGPUIndexBuffer;
+         class function CreateStaticCopy(aIndexBuffer : TIndexBuffer; aContext : TContext3D) : TGPUIndexBuffer;
          destructor Destroy; override;
 
          class procedure RegisterGPUIndexBufferClass(const aClass : TGPUIndexBufferClass);
@@ -464,6 +466,24 @@ begin
    else Result := TGPUVertexBuffer.DoCreate(aFormat, aLength, aType);
 end;
 
+// CreateStaticCopy
+//
+class function TGPUVertexBuffer.CreateStaticCopy(aVertexBuffer : TVertexBuffer; aContext : TContext3D) : TGPUVertexBuffer;
+begin
+   Result := Create(aVertexBuffer.Format, aVertexBuffer.Length, gpubtStatic);
+   try
+      var dest := Result.Lock(aContext);
+      try
+         Move(aVertexBuffer.Buffer^, dest.Buffer^, dest.Size);
+      finally
+         Result.Unlock(aContext);
+      end;
+   except
+      Result.Free;
+      raise;
+   end;
+end;
+
 // Destroy
 //
 destructor TGPUVertexBuffer.Destroy;
@@ -530,6 +550,24 @@ begin
    if vTGPUIndexBufferClass <> nil then
       Result := vTGPUIndexBufferClass.DoCreate(aFormat, aLength, aType)
    else Result := TGPUIndexBuffer.DoCreate(aFormat, aLength, aType);
+end;
+
+// CreateStaticCopy
+//
+class function TGPUIndexBuffer.CreateStaticCopy(aIndexBuffer : TIndexBuffer; aContext : TContext3D) : TGPUIndexBuffer;
+begin
+   Result := Create(aIndexBuffer.Format, aIndexBuffer.Length, gpubtStatic);
+   try
+      var dest := Result.Lock(aContext);
+      try
+         Move(aIndexBuffer.Buffer^, dest.Buffer^, dest.Size);
+      finally
+         Result.Unlock(aContext);
+      end;
+   except
+      Result.Free;
+      raise;
+   end;
 end;
 
 // Destroy
