@@ -15,7 +15,7 @@
 {**********************************************************************}
 unit FMXU.PointCloud;
 
-{.$i fmxu.inc}
+{$i fmxu.inc}
 
 interface
 
@@ -31,13 +31,15 @@ type
    TPointCloud3D = class (TControl3D)
       private
          FPoints : TVertexBuffer;
+         FIndices : TIndexBuffer;
          {$ifdef use_gpu_buffers}
          FQuads : TGPUVertexBuffer;
          {$else}
          FQuads : TVertexBuffer;
          {$endif}
-         FIndices : TIndexBuffer;
+         FGPUPoints : TGPUVertexBuffer;
          FGPUIndices : TGPUIndexBuffer;
+
          FMaterialSource : TPointColorMaterialSource;
          FPointSize : Single;
 
@@ -159,6 +161,7 @@ begin
    FreeAndNil(FQuads);
    FreeAndNil(FIndices);
    FreeAndNil(FGPUIndices);
+   FreeAndNil(FGPUPoints);
 end;
 
 // NeedDepthSorting
@@ -302,21 +305,24 @@ begin
       else FIndices := TIndexBuffer.Create(Points.Length, TIndexFormat.UInt16);
       IndexBufferSetSequence(FIndices, 0, 1);
 
-      Exit;
+      {$ifdef use_gpu_buffers}
+      FGPUPoints := TGPUVertexBuffer.CreateStaticCopy(FPoints, Context);
+      {$endif}
+
+   end else begin
+
+      {$ifdef use_gpu_buffers}
+      FQuads := TGPUVertexBuffer.Create([ TVertexFormat.Vertex, TVertexFormat.Color0 ], Points.Length*4, gpubtStatic);
+      {$else}
+      FQuads := TVertexBuffer.Create([ TVertexFormat.Vertex, TVertexFormat.Color0 ], Points.Length*4);
+      {$endif}
+      PointsToQuads;
+
+      FIndices := CreateIndexBufferQuadSequence(Points.Length);
    end;
 
    {$ifdef use_gpu_buffers}
-   FQuads := TGPUVertexBuffer.Create([ TVertexFormat.Vertex, TVertexFormat.Color0 ], Points.Length*4, gpubtDynamic);
-   {$else}
-   FQuads := TVertexBuffer.Create([ TVertexFormat.Vertex, TVertexFormat.Color0 ], Points.Length*4);
-   {$endif}
-   PointsToQuads;
-
-   FIndices := CreateIndexBufferQuadSequence(Points.Length);
-   {$ifdef use_gpu_buffers}
-   FGPUIndices := TGPUIndexBuffer.Create(FIndices.Format, FIndices.Length, gpubtDynamic);
-   Move(FIndices.Buffer^, FGPUIndices.Lock(Context).Buffer^, FIndices.Size);
-   FGPUIndices.Unlock(Context);
+   FGPUIndices := TGPUIndexBuffer.CreateStaticCopy(FIndices, Context);
    {$endif}
 end;
 
@@ -348,19 +354,27 @@ begin
 
    var mat := FMaterialSource.Material;
    var opa := AbsoluteOpacity;
+   {$ifdef use_gpu_buffers}
+   if Context.SupportsGPUPrimitives then begin
+
+      Context.ApplyMaterial(mat, opa);
+      if PointShape = pcsPoint then
+         Context.DrawGPUPrimitives(TPrimitivesKindU.Points, FGPUPoints, FGPUIndices)
+      else Context.DrawGPUPrimitives(TPrimitivesKindU.Triangles, FQuads, FGPUIndices);
+      Context.ResetMaterial;
+
+   end else begin
+
+      if PointShape = pcsPoint then
+         Context.DrawPoints(FPoints, FIndices, mat, opa)
+      else Context.DrawTriangles(FQuads, FGPUIndices, mat, opa);
+
+   end;
+   {$else}
    if PointShape = pcsPoint then
       Context.DrawPoints(FPoints, FIndices, mat, opa)
-   else begin
-      {$ifdef use_gpu_buffers}
-      if Context.SupportsGPUPrimitives then begin
-         Context.ApplyMaterial(mat, opa);
-         Context.DrawGPUPrimitives(TPrimitivesKindU.Triangles, FQuads, FGPUIndices);
-         Context.ResetMaterial;
-      end else Context.DrawTriangles(FQuads, FGPUIndices, mat, opa);
-      {$else}
-      Context.DrawTriangles(FQuads, FIndices, mat, opa);
-      {$endif}
-   end;
+   else Context.DrawTriangles(FQuads, FIndices, mat, opa);
+   {$endif}
 
    context.PopContextStates;
 end;
