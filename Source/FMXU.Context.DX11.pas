@@ -1082,10 +1082,11 @@ procedure TFMXUContext3D_DX11.DoSetScissorRect(const aScissorRect : TRect);
 var
    scaledRect : TRectF;
 begin
-   scaledRect.Left := aScissorRect.Left * scale;
-   scaledRect.Top := aScissorRect.Top * scale;
-   scaledRect.Right := aScissorRect.Right * scale;
-   scaledRect.Bottom := aScissorRect.Bottom * scale;
+   var f := Scale;
+   scaledRect.Left := aScissorRect.Left * f;
+   scaledRect.Top := aScissorRect.Top * f;
+   scaledRect.Right := aScissorRect.Right * f;
+   scaledRect.Bottom := aScissorRect.Bottom * f;
 
    var fpuMask := SetExceptionMask(exAllArithmeticExceptions);
    try
