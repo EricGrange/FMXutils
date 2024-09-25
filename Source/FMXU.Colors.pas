@@ -15,11 +15,16 @@
 {**********************************************************************}
 unit FMXU.Colors;
 
+{$i fmxu.inc}
+
 interface
 
-uses System.UITypes;
+uses System.UITypes, System.Math.Vectors;
 
 function ColorComposeAlpha(const color : TAlphaColor; const aOpacity : Single) : TAlphaColor;
+function ColorPremultiplyAlpha(const color : TAlphaColor; const aOpacity : Single) : TAlphaColor;
+
+function ColorToVector3D(const color : TAlphaColor) : TVector3D;
 
 // ------------------------------------------------------------------
 // ------------------------------------------------------------------
@@ -36,6 +41,29 @@ begin
    Result := color;
    if aOpacity < 1 then
       TAlphaColorRec(Result).A := Trunc(TAlphaColorRec(color).A * aOpacity);
+end;
+
+// ColorPremultiplyAlpha
+//
+function ColorPremultiplyAlpha(const color : TAlphaColor; const aOpacity : Single) : TAlphaColor;
+begin
+   if aOpacity < 1 then begin
+      TAlphaColorRec(Result).R := Trunc(TAlphaColorRec(color).R * aOpacity);
+      TAlphaColorRec(Result).G := Trunc(TAlphaColorRec(color).G * aOpacity);
+      TAlphaColorRec(Result).B := Trunc(TAlphaColorRec(color).B * aOpacity);
+      TAlphaColorRec(Result).A := Trunc(TAlphaColorRec(color).A * aOpacity);
+   end else Result := color;
+end;
+
+// ColorToVector3D
+//
+function ColorToVector3D(const color : TAlphaColor) : TVector3D;
+begin
+   var f : Single := 1/255;
+   Result.V[0] := TAlphaColorRec(color).R * f;
+   Result.V[1] := TAlphaColorRec(color).G * f;
+   Result.V[2] := TAlphaColorRec(color).B * f;
+   Result.V[3] := TAlphaColorRec(color).A * f;
 end;
 
 end.
