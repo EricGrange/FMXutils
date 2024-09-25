@@ -99,6 +99,8 @@ type
    IContextShaderSource = interface
       ['{2345E06D-A1F7-437B-97D9-60549EAD26CB}']
       function GetSelf : TIContextShaderSource;
+      //: Per process unique ID
+      function GetID : NativeUInt;
       function GetVariablesSize : Integer;
       function GetMaxTextureSlot : Integer;
       function IndexOfVariable(const name : String) : Integer;
@@ -114,12 +116,16 @@ type
    end;
    TIContextShaderSource = class(TInterfacedObject, IContextShaderSource)
       protected
+         class var vIDCounter : NativeUInt;
+      protected
+         FID : NativeUInt;
          FSource : TContextShaderSource;
          FVariablesSize : Integer;
          FMaxTextureSlot : Integer;
          FUserData : IInterface;
 
          function GetSelf : TIContextShaderSource;
+         function GetID : NativeUInt;
          function GetVariablesSize : Integer;
          function GetMaxTextureSlot : Integer;
          function GetUserData : IInterface;
@@ -134,6 +140,7 @@ type
 
          function SpecializeForVertexDeclaration(const declaration : TVertexDeclaration) : IContextShaderSource; virtual;
 
+         property ID : NativeUInt read FID;
          property Source : TContextShaderSource read FSource;
          property Code : TContextShaderCode read FSource.Code;
          property Variables : TContextShaderVariables read FSource.Variables;
@@ -629,6 +636,7 @@ end;
 constructor TIContextShaderSource.Create(const aSource : TContextShaderSource; minVariableSlotSize : Integer);
 begin
    inherited Create;
+   FID := AtomicIncrement(vIDCounter);
    FSource := aSource;
    FVariablesSize := 0;
    FMaxTextureSlot := -1;
@@ -694,6 +702,13 @@ end;
 function TIContextShaderSource.GetSelf : TIContextShaderSource;
 begin
    Result := Self;
+end;
+
+// GetID
+//
+function TIContextShaderSource.GetID : NativeUInt;
+begin
+   Result := FID;
 end;
 
 // GetVariablesSize
