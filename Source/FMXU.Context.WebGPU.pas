@@ -177,6 +177,18 @@ type
 
          class function BlankTexture : IWGPUTexture;
 
+         property RenderTargetView : IWGPUTextureView read FRenderTargetView;
+         property PipelineManager : TWebGPUPipelineManager read FPipeline;
+
+         property CommandEncoder : IWGPUCommandEncoder read FCommandEncoder;
+         property RenderPassEncoder : IWGPURenderPassEncoder read FRenderPass;
+
+         procedure EndRenderPassEncoder;
+         procedure BeginRenderPassEncoder(
+            const aTarget : TClearTargets; const aColor : TAlphaColor;
+            const aDepth : Single; const aStencil : Cardinal
+         );
+
          class function CreateBuffer(
             dataSize : Cardinal; usage : TWGPUBufferUsage;
             const name : UTF8String = ''
@@ -378,6 +390,7 @@ var
          FRenderTexture, WGPUTextureAspect_All,
          'TextureRenderTargetView'
       );
+      Assert(FRenderTargetView <> nil);
    end;
 
    procedure CreateWindowRenderTarget;
@@ -523,6 +536,7 @@ begin
             FRenderSurface.GetCurrentTexture, WGPUTextureAspect_All,
             'SurfaceTargetView'
          );
+         Assert(FRenderTargetView <> nil);
       end else begin
          FTextureBufferMap := nil;
       end;
@@ -558,53 +572,80 @@ procedure TFMXUContext3D_WebGPU.DoClear(
 begin
    var fpuMask := SetExceptionMask(exAllArithmeticExceptions);
    try
-      if FRenderPass <> nil then begin
-         // does FMX really allow multiple DoClear call ? if not this is dead code
-         FRenderPass.&End;
-         FRenderPass := nil;
-      end;
+      EndRenderPassEncoder;
 
-      // TODO: honor color & stencil flags
-
-      var renderPassColorAttachment := Default(TWGPURenderPassColorAttachment);
-      if FMultiSampleTexture <> nil then begin
-         // multisample rendering to a surface
-         renderPassColorAttachment.view := FMultiSampleView.GetHandle;
-         renderPassColorAttachment.resolveTarget := FRenderTargetView.GetHandle
-      end else begin
-         // no multisample
-         renderPassColorAttachment.view := FRenderTargetView.GetHandle;
-      end;
-      renderPassColorAttachment.loadOp := WGPULoadOp_Clear;
-      renderPassColorAttachment.storeOp := WGPUStoreOp_Store;
-      renderPassColorAttachment.clearValue := ColorToWGPUColor(aColor);
-      renderPassColorAttachment.depthSlice := WGPU_DEPTH_SLICE_UNDEFINED;
-
-      var depthStencilAttachment := Default(TWGPURenderPassDepthStencilAttachment);
-      depthStencilAttachment.view := FDepthStencilView.GetHandle;
-      depthStencilAttachment.depthClearValue := 1;
-      depthStencilAttachment.depthLoadOp := WGPULoadOp_Clear;
-      depthStencilAttachment.depthStoreOp := WGPUStoreOp_Store;
-//      depthStencilAttachment.stencilLoadOp := WGPULoadOp_Clear;
-//      depthStencilAttachment.stencilStoreOp := WGPUStoreOp_Store;
-      depthStencilAttachment.stencilReadOnly := 1;
-
-      var renderPassDescriptor := Default(TWGPURenderPassDescriptor);
-      renderPassDescriptor.colorAttachmentCount := 1;
-      renderPassDescriptor.colorAttachments := @renderPassColorAttachment;
-      renderPassDescriptor.depthStencilAttachment := @depthStencilAttachment;
-
-      FRenderPass := FCommandEncoder.BeginRenderPass(renderPassDescriptor);
-
-      FRenderPass.SetViewport(
-         FViewPort.X, FViewPort.Y, FViewPort.Width, FViewPort.Height,
-         FViewPort.MinDepth, FViewPort.MaxDepth
-      );
-      ApplyScissorRect;
+      BeginRenderPassEncoder(aTarget, aColor, aDepth, aStencil);
    finally
       SetExceptionMask(fpuMask);
    end;
 end;
+
+// EndRenderPassEncoder
+//
+procedure TFMXUContext3D_WebGPU.EndRenderPassEncoder;
+begin
+   if FRenderPass <> nil then begin
+      FRenderPass.&End;
+      FRenderPass := nil;
+   end;
+end;
+
+// BeginRenderPassEncoder
+//
+procedure TFMXUContext3D_WebGPU.BeginRenderPassEncoder(
+   const aTarget : TClearTargets; const aColor : TAlphaColor;
+   const aDepth : Single; const aStencil : Cardinal
+   );
+begin
+   Assert(FRenderPass = nil);
+
+   // TODO: stencil flags
+
+   var renderPassColorAttachment := Default(TWGPURenderPassColorAttachment);
+   if FMultiSampleTexture <> nil then begin
+      // multisample rendering to a surface
+      renderPassColorAttachment.view := FMultiSampleView.GetHandle;
+      renderPassColorAttachment.resolveTarget := FRenderTargetView.GetHandle
+   end else begin
+      // no multisample
+      renderPassColorAttachment.view := FRenderTargetView.GetHandle;
+   end;
+
+   if TClearTarget.Color in aTarget then
+      renderPassColorAttachment.loadOp := WGPULoadOp_Clear
+   else renderPassColorAttachment.loadOp := WGPULoadOp_Load;
+   renderPassColorAttachment.storeOp := WGPUStoreOp_Store;
+   renderPassColorAttachment.clearValue := ColorToWGPUColor(aColor);
+   renderPassColorAttachment.depthSlice := WGPU_DEPTH_SLICE_UNDEFINED;
+
+   var depthStencilAttachment := Default(TWGPURenderPassDepthStencilAttachment);
+   depthStencilAttachment.view := FDepthStencilView.GetHandle;
+   depthStencilAttachment.depthClearValue := aDepth;
+   if TClearTarget.Depth in aTarget then
+      depthStencilAttachment.depthLoadOp := WGPULoadOp_Clear
+   else depthStencilAttachment.depthLoadOp := WGPULoadOp_Load;
+   depthStencilAttachment.depthStoreOp := WGPUStoreOp_Store;
+//   if TClearTarget.Stencil in aTarget then
+//      depthStencilAttachment.stencilLoadOp := WGPULoadOp_Clear;
+//   else depthStencilAttachment.stencilLoadOp := WGPULoadOp_Load;
+//   depthStencilAttachment.stencilStoreOp := WGPUStoreOp_Store;
+//   depthStencilAttachment.stencilClearValue := aStencil;
+   depthStencilAttachment.stencilReadOnly := 1;
+
+   var renderPassDescriptor := Default(TWGPURenderPassDescriptor);
+   renderPassDescriptor.colorAttachmentCount := 1;
+   renderPassDescriptor.colorAttachments := @renderPassColorAttachment;
+   renderPassDescriptor.depthStencilAttachment := @depthStencilAttachment;
+
+   FRenderPass := FCommandEncoder.BeginRenderPass(renderPassDescriptor);
+
+   FRenderPass.SetViewport(
+      FViewPort.X, FViewPort.Y, FViewPort.Width, FViewPort.Height,
+      FViewPort.MinDepth, FViewPort.MaxDepth
+   );
+   ApplyScissorRect;
+end;
+
 
 // DoEndScene
 //
@@ -976,7 +1017,7 @@ begin
 
    var fpuMask := SetExceptionMask(exAllArithmeticExceptions);
    try
-      shader := TWebGPUCompiledShader.Create(aShader.Kind, iSource, vDevice.Device, True);
+      shader := TWebGPUCompiledShader.Create(aShader.Kind, iSource, vDevice, True);
       aShader.Handle := AddResource(shader);
    finally
       SetExceptionMask(fpuMask);
@@ -1031,7 +1072,7 @@ begin
          );
       end else begin
          FRenderPass.SetScissorRect(
-            0, 0, Width, Height
+            0, 0, Round(FViewPort.Width), Round(FViewPort.Height)
          );
       end;
    finally
