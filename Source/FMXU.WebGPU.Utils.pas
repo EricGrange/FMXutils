@@ -29,6 +29,8 @@ uses
 
 type
 
+   TWebGPUDevice = class;
+
    TWebGPUViewPort = record
       X, Y, Width, Height : Single;
       MinDepth, MaxDepth : Single;
@@ -48,7 +50,7 @@ type
       function FindVariable(const name : String; var offset, size : UInt64) : Boolean;
       procedure GetOffsetAndSize(index : Integer; var offset, size : UInt64);
       function FindTextureVariable(const name : String; var slot : Integer) : Boolean;
-      function GetSpecializedModule(const vertexDeclaration : TVertexDeclaration; const aDevice : IWGPUDevice) : IWGPUShaderModule;
+      function GetSpecializedModule(const vertexDeclaration : TVertexDeclaration; const aDevice : TWebGPUDevice) : IWGPUShaderModule;
    end;
 
    TWebGPUSpecialization = record
@@ -71,13 +73,13 @@ type
          FPaddingSize : Cardinal;
          FOffsets, FSizes : TArray<Cardinal>;
 
-         function CompileShaderModule(const aShader : IContextShaderSource; const aDevice : IWGPUDevice) : IWGPUShaderModule;
+         function CompileShaderModule(const aShader : IContextShaderSource; const aDevice : TWebGPUDevice) : IWGPUShaderModule;
 
       public
          constructor Create(
             aKind : TContextShaderKind;
             const aShader : IContextShaderSource;
-            const aDevice : IWGPUDevice;
+            const aDevice : TWebGPUDevice;
             baseShader : Boolean
             );
 
@@ -85,7 +87,7 @@ type
          function GetVariableCount : Integer;
          function FindVariable(const name : String; var offset, size : UInt64) : Boolean;
          function FindTextureVariable(const name : String; var slot : Integer) : Boolean;
-         function GetSpecializedModule(const vertexDeclaration : TVertexDeclaration; const aDevice : IWGPUDevice) : IWGPUShaderModule;
+         function GetSpecializedModule(const vertexDeclaration : TVertexDeclaration; const aDevice : TWebGPUDevice) : IWGPUShaderModule;
 
          function GetID : NativeUInt;
          function GetKind : TContextShaderKind;
@@ -121,7 +123,7 @@ type
          function Status : TWGPUBufferMapAsyncStatus;
          procedure Wait;
          function Data : Pointer;
-         function Size : NativeUInt;
+         function Size : UInt64;
    end;
 
    // holds Instance, Device & Adapter, typically a singleton
@@ -173,6 +175,12 @@ type
          function CreateBufferFromData(dataSize : Cardinal; usage : TWGPUBufferUsage; dataPointer : Pointer; const name : UTF8String = '') : IWGPUBuffer;
 
          function TextureBindGroupLayout(nbTextures : Integer) : IWGPUBindGroupLayout;
+
+         // compile WGSL shader and raise exception in case of errors
+         function CompileShaderModule(const wgslSource : UTF8String; const name : UTF8String = '') : IWGPUShaderModule; overload; inline;
+         function CompileShaderModule(const wgslSourcePtr : PUTF8Char; wgslSourceLen : Integer; const name : UTF8String = '') : IWGPUShaderModule; overload;
+
+         function CreateCommandEncoder(const name : UTF8String = '') : IWGPUCommandEncoder;
    end;
 
    // holds a particular pipeline configuration
@@ -509,6 +517,25 @@ begin
    end;
 end;
 
+// CompilationCallback
+// assumes userdata1 is a TStrings
+procedure CompilationCallback(
+   status: TWGPUCompilationInfoRequestStatus;
+   const compilationInfo: PWGPUCompilationInfo; userdata1, userdata2: Pointer
+   ); cdecl;
+begin
+   if compilationInfo.messageCount = 0 then Exit;
+
+   var p := compilationInfo.messages;
+   for var i := 1 to compilationInfo.messageCount do begin
+      TStrings(userdata1).Add(Format(
+         'Line %d:%d %s',
+         [ p.lineNum, p.linePos, p.message ]
+      ));
+      Inc(p);
+   end;
+end;
+
 // Create
 //
 constructor TWebGPUDevice.Create;
@@ -679,7 +706,7 @@ end;
 //
 function TWebGPUDevice.CreateBufferFromData(dataSize : Cardinal; usage : TWGPUBufferUsage; dataPointer : Pointer; const name : UTF8String = '') : IWGPUBuffer;
 begin
-   Result := CreateBuffer(dataSize, usage, name);
+   Result := CreateBuffer(dataSize, usage or WGPUBufferUsage_CopyDst , name);
    FQueue.WriteBuffer(Result, 0, dataPointer, dataSize);
 end;
 
@@ -715,33 +742,61 @@ begin
    Result := FTexturesBindGroupLayouts[nbTextures];
 end;
 
+// CompileShaderModule (string)
+//
+function TWebGPUDevice.CompileShaderModule(const wgslSource : UTF8String; const name : UTF8String = '') : IWGPUShaderModule;
+begin
+   Result := CompileShaderModule(Pointer(wgslSource), Length(wgslSource), name);
+end;
+
+// CompileShaderModule (pointer, length)
+//
+function TWebGPUDevice.CompileShaderModule(const wgslSourcePtr : PUTF8Char; wgslSourceLen : Integer; const name : UTF8String = '') : IWGPUShaderModule;
+begin
+   var shaderSourceWGSL := Default(TWGPUShaderSourceWGSL);
+   shaderSourceWGSL.chain.sType := WGPUSType_ShaderSourceWGSL;
+   shaderSourceWGSL.code.data := wgslSourcePtr;
+   shaderSourceWGSL.code.length := wgslSourceLen;
+
+   var shaderModuleDescriptor := Default(TWGPUShaderModuleDescriptor);
+   shaderModuleDescriptor.&label := name;
+   shaderModuleDescriptor.nextInChain := @shaderSourceWGSL;
+
+   Result := Device.CreateShaderModule(shaderModuleDescriptor);
+   Assert(Result <> nil);
+
+   var errors := TStringList.Create;
+   try
+      var compilationInfoCallbackInfo2 := Default(TWGPUCompilationInfoCallbackInfo2);
+      compilationInfoCallbackInfo2.mode := WGPUCallbackMode_AllowSpontaneous;
+      compilationInfoCallbackInfo2.callback := @CompilationCallback;
+      compilationInfoCallbackInfo2.userdata1 := errors;
+      Result.GetCompilationInfo2(compilationInfoCallbackInfo2);
+      if errors.Count > 0 then
+         raise EFMXU_WebGPUException.Create('Vertex Shader error:'#13#10 + errors.Text);
+   finally
+      FreeAndNil(errors);
+   end;
+end;
+
+// CreateCommandEncoder
+//
+function TWebGPUDevice.CreateCommandEncoder(const name : UTF8String = '') : IWGPUCommandEncoder;
+begin
+   var commandEncoderDescriptor := Default(TWGPUCommandEncoderDescriptor);
+   commandEncoderDescriptor.&label := name;
+   Result := Device.CreateCommandEncoder(commandEncoderDescriptor);
+end;
+
 // ------------------
 // ------------------ TWebGPUCompiledShader ------------------
 // ------------------
-
-// assume userdata1 is a TStrings
-procedure CompilationCallback(
-   status: TWGPUCompilationInfoRequestStatus;
-   const compilationInfo: PWGPUCompilationInfo; userdata1, userdata2: Pointer
-   ); cdecl;
-begin
-   if compilationInfo.messageCount = 0 then Exit;
-
-   var p := compilationInfo.messages;
-   for var i := 1 to compilationInfo.messageCount do begin
-      TStrings(userdata1).Add(Format(
-         'Line %d:%d %s',
-         [ p.lineNum, p.linePos, p.message ]
-      ));
-      Inc(p);
-   end;
-end;
 
 // Create
 //
 constructor TWebGPUCompiledShader.Create(
    aKind : TContextShaderKind; const aShader : IContextShaderSource;
-   const aDevice : IWGPUDevice; baseShader : Boolean
+   const aDevice : TWebGPUDevice; baseShader : Boolean
    );
 begin
    inherited Create;
@@ -825,42 +880,25 @@ begin
    end;
    bindGroupLayoutDescriptor.entryCount := nbVariables;
    bindGroupLayoutDescriptor.entries := Pointer(bindGroupLayoutEntries);
-   FBindGroupLayout := aDevice.CreateBindGroupLayout(bindGroupLayoutDescriptor);
+   FBindGroupLayout := aDevice.Device.CreateBindGroupLayout(bindGroupLayoutDescriptor);
 end;
 
 // CompileShaderModule
 //
-function TWebGPUCompiledShader.CompileShaderModule(const aShader : IContextShaderSource; const aDevice : IWGPUDevice) : IWGPUShaderModule;
+function TWebGPUCompiledShader.CompileShaderModule(
+   const aShader : IContextShaderSource; const aDevice : TWebGPUDevice
+   ) : IWGPUShaderModule;
 begin
    var contextShaderSource := aShader.GetSelf;
-
-   var shaderSourceWGSL := Default(TWGPUShaderSourceWGSL);
-   shaderSourceWGSL.chain.sType := WGPUSType_ShaderSourceWGSL;
    Assert(contextShaderSource.Source.Arch = TContextShaderArch_WGSL);
-   shaderSourceWGSL.code.data := PUTF8Char(contextShaderSource.Code);
-   shaderSourceWGSL.code.length := Length(contextShaderSource.Code);
 
-   var shaderModuleDescriptor := Default(TWGPUShaderModuleDescriptor);
    case FKind of
-      TContextShaderKind.VertexShader : shaderModuleDescriptor.&label := 'VertexShader';
-      TContextShaderKind.PixelShader  : shaderModuleDescriptor.&label := 'PixelShader';
-   end;
-   shaderModuleDescriptor.nextInChain := @shaderSourceWGSL;
-
-   Result := aDevice.CreateShaderModule(shaderModuleDescriptor);
-   Assert(Result <> nil);
-
-   var errors := TStringList.Create;
-   try
-      var compilationInfoCallbackInfo2 := Default(TWGPUCompilationInfoCallbackInfo2);
-      compilationInfoCallbackInfo2.mode := WGPUCallbackMode_AllowSpontaneous;
-      compilationInfoCallbackInfo2.callback := @CompilationCallback;
-      compilationInfoCallbackInfo2.userdata1 := errors;
-      Result.GetCompilationInfo2(compilationInfoCallbackInfo2);
-      if errors.Count > 0 then
-         raise EFMXU_WebGPUException.Create('Vertex Shader error:'#13#10 + errors.Text);
-   finally
-      FreeAndNil(errors);
+      TContextShaderKind.VertexShader :
+         Result := aDevice.CompileShaderModule(PUTF8Char(contextShaderSource.Code), Length(contextShaderSource.Code), 'VertexShader');
+      TContextShaderKind.PixelShader :
+         Result := aDevice.CompileShaderModule(PUTF8Char(contextShaderSource.Code), Length(contextShaderSource.Code), 'PixelShader');
+   else
+      Assert(False);
    end;
 end;
 
@@ -905,7 +943,7 @@ end;
 
 // GetSpecializedModule
 //
-function TWebGPUCompiledShader.GetSpecializedModule(const vertexDeclaration : TVertexDeclaration; const aDevice : IWGPUDevice) : IWGPUShaderModule;
+function TWebGPUCompiledShader.GetSpecializedModule(const vertexDeclaration : TVertexDeclaration; const aDevice : TWebGPUDevice) : IWGPUShaderModule;
 begin
    for var i := 0 to High(FSpecializations) do
       if SameVertexDeclaration(vertexDeclaration, FSpecializations[i].Declaration) then
@@ -1191,7 +1229,7 @@ begin
    PipelineLayout := aDevice.Device.CreatePipelineLayout(pipelineLayoutDescriptor);
    Assert(PipelineLayout <> nil);
 
-   FVertexState.module := VertexCompiled.GetSpecializedModule(FVertexDeclaration, aDevice.Device).GetHandle;
+   FVertexState.module := VertexCompiled.GetSpecializedModule(FVertexDeclaration, aDevice).GetHandle;
 
    var pipelineDescriptor := Default(TWGPURenderPipelineDescriptor);
    pipelineDescriptor.&label := 'RenderPipeline';
@@ -1531,7 +1569,7 @@ end;
 
 // Size
 //
-function TIWebGPUMappedBuffer.Size : NativeUInt;
+function TIWebGPUMappedBuffer.Size : UInt64;
 begin
    Result := FSize;
 end;
