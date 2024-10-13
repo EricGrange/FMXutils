@@ -552,8 +552,8 @@ begin
 
       FViewPort.X := 0;
       FViewPort.Y := 0;
-      FViewPort.Width := Width * f;
-      FViewPort.Height := Height * f;
+      FViewPort.Width := Trunc(Width * f);
+      FViewPort.Height := Trunc(Height * f);
       FViewPort.MinDepth := 0;
       FViewPort.MaxDepth := 1;
 
@@ -1072,7 +1072,7 @@ begin
          );
       end else begin
          FRenderPass.SetScissorRect(
-            0, 0, Round(FViewPort.Width), Round(FViewPort.Height)
+            0, 0, Trunc(FViewPort.Width), Trunc(FViewPort.Height)
          );
       end;
    finally
