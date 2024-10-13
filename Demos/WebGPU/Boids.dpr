@@ -10,7 +10,7 @@ uses
 {$R *.res}
 
 begin
-   RegisterWebGPUContext('D:\GC\Delphi-WebGPU\dawn-x64\webgpu_dawn.dll');
+   RegisterWebGPUContext;
 
    Application.Initialize;
    Application.CreateForm(TBoidsForm, BoidsForm);

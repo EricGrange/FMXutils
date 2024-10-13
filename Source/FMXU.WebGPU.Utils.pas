@@ -530,7 +530,7 @@ begin
    for var i := 1 to compilationInfo.messageCount do begin
       TStrings(userdata1).Add(Format(
          'Line %d:%d %s',
-         [ p.lineNum, p.linePos, p.message ]
+         [ p.lineNum, p.linePos, p.message.data ]
       ));
       Inc(p);
    end;
