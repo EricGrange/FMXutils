@@ -468,7 +468,7 @@ end;
 
 // AdapterCallback
 //
-procedure AdapterCallback(status: TWGPURequestAdapterStatus; adapter: TWGPUAdapter; const &message: PUTF8Char; userdata: Pointer); cdecl;
+procedure AdapterCallback(status: TWGPURequestAdapterStatus; adapter: TWGPUAdapter; const &message: TWGPUStringView; userdata: Pointer); cdecl;
 begin
    if (status = WGPURequestAdapterStatus_Success) and (adapter <> 0) then
       TWebGPUDevice(userdata).FAdapter := WGPUFactory.WrapAdapter(adapter);
@@ -476,7 +476,7 @@ end;
 
 // DeviceCallback
 //
-procedure DeviceCallback(status: TWGPURequestDeviceStatus; device: TWGPUDevice; const &message: PUTF8Char; userdata: Pointer); cdecl;
+procedure DeviceCallback(status: TWGPURequestDeviceStatus; device: TWGPUDevice; const &message: TWGPUStringView; userdata: Pointer); cdecl;
 begin
    if (status = WGPURequestDeviceStatus_Success) and (device <> 0) then
       TWebGPUDevice(userData).FDevice := WGPUFactory.WrapDevice(device);
@@ -486,7 +486,7 @@ end;
 //
 procedure UncapturedErrorCallback(
    const device: PWGPUDevice;
-   &type: TWGPUErrorType; const &message: PUTF8Char;
+   &type: TWGPUErrorType; const &message: TWGPUStringView;
    userdata1: Pointer; userdata2: Pointer
    ); cdecl;
 var
