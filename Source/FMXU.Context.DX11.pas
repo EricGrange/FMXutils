@@ -134,7 +134,10 @@ type
                                        const aDepthStencil : Boolean); override;
 
       public
-         class procedure TestDriverSupport(out aDriverType : D3D_DRIVER_TYPE; out aFeatureLevel : TD3D_FEATURE_LEVEL);
+         class procedure TestDriverSupport(
+            out aDriverType : D3D_DRIVER_TYPE;
+            out aFeatureLevel : TD3D_FEATURE_LEVEL;
+            whichGPU : Integer = -1);
 
          class function BlankTexture : ID3D11Texture2D;
 
@@ -156,7 +159,7 @@ type
          property VSync : Boolean read FVSync write FVSync;
    end;
 
-procedure RegisterDX11ContextU;
+procedure RegisterDX11ContextU(whichGPU : Integer = -1);
 procedure UnregisterDX11ContextU;
 
 // Set to True before registering the context if you want DX in debug mode
@@ -183,12 +186,12 @@ const
 
 // RegisterDX11ContextU
 //
-procedure RegisterDX11ContextU;
+procedure RegisterDX11ContextU(whichGPU : Integer = -1);
 var
    driverType : D3D_DRIVER_TYPE;
    featureLevel : TD3D_FEATURE_LEVEL;
 begin
-   TFMXUContext3D_DX11.TestDriverSupport(driverType, featureLevel);
+   TFMXUContext3D_DX11.TestDriverSupport(driverType, featureLevel, whichGPU);
    if (driverType <> D3D_DRIVER_TYPE_NULL) and (featureLevel >= D3D_FEATURE_LEVEL_11_0) then begin
       TContextManager.RegisterContext(TFMXUContext3D_DX11, True);
       TGPUVertexBuffer.RegisterGPUVertexBufferClass(TGPUVertexBufferDX11);
@@ -231,7 +234,8 @@ end;
 //
 class procedure TFMXUContext3D_DX11.TestDriverSupport(
    out aDriverType : D3D_DRIVER_TYPE;
-   out aFeatureLevel : TD3D_FEATURE_LEVEL
+   out aFeatureLevel : TD3D_FEATURE_LEVEL;
+   whichGPU : Integer = -1
    );
 begin
    // note that we create an actual device and hold it,
@@ -240,7 +244,7 @@ begin
    // the test is successfull, the device will be used, and it makes no sense
    // to discard it just to recreate it afterwards
    if vDevice = nil then
-      vDevice := TDX11Device.Create(vDX11_Debug);
+      vDevice := TDX11Device.Create(vDX11_Debug, whichGPU);
 
    aDriverType := vDevice.DriverType;
    aFeatureLevel := vDevice.FeatureLevel;
@@ -1148,8 +1152,8 @@ procedure TFMXUContext3D_DX11.DoSetShaderVariable(const aName : String; const da
    begin
       var i := iSource.IndexOfVariable(aName);
       if i >= 0 then begin
-         var size := SizeOf(data);
-         var vSize := iSource.Size[i];
+         var size : NativeInt := SizeOf(data);
+         var vSize :NativeInt := iSource.Size[i];
          if size > vSize then
             size := vSize;
          Move(data[0], variables[iSource.Index[i]], size);
