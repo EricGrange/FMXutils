@@ -50,6 +50,7 @@ type
          vVertexShaderVariables, vPixelShaderVariables : TBytes;
 
          // FMX limited to 16 instead of D3D11_COMMONSHADER_INPUT_RESOURCE_SLOT_COUNT ?
+         vVertexShaderResourceViews : array [ 0..15 ] of ID3D11ShaderResourceView;
          vPixelShaderResourceViews : array [ 0..15 ] of ID3D11ShaderResourceView;
 
          vSharedBuffers : array [ TDX11SharedBufferType ] of TDX11SharedBuffer;
@@ -216,6 +217,8 @@ class procedure TFMXUContext3D_DX11.ReleasePrivateVars;
 begin
    for var i := Low(vSharedBuffers) to High(vSharedBuffers) do
       vSharedBuffers[i] := Default(TDX11SharedBuffer);
+   for var i := Low(vVertexShaderResourceViews) to High(vVertexShaderResourceViews) do
+      vVertexShaderResourceViews[i] := nil;
    for var i := Low(vPixelShaderResourceViews) to High(vPixelShaderResourceViews) do
       vPixelShaderResourceViews[i] := nil;
 
@@ -1153,7 +1156,7 @@ procedure TFMXUContext3D_DX11.DoSetShaderVariable(const aName : String; const da
       var i := iSource.IndexOfVariable(aName);
       if i >= 0 then begin
          var size : NativeInt := SizeOf(data);
-         var vSize :NativeInt := iSource.Size[i];
+         var vSize : NativeInt := iSource.Size[i];
          if size > vSize then
             size := vSize;
          Move(data[0], variables[iSource.Index[i]], size);
@@ -1177,15 +1180,13 @@ end;
 //
 procedure TFMXUContext3D_DX11.DoSetShaderVariable(const aName : String; const aTexture : TTexture);
 
-   procedure SetShaderResource(const slot : Integer);
-   var
-      tex2D : ID3D11Texture2D;
+   procedure SetShaderResource(const slot : Integer; var tex2D : ID3D11Texture2D; const filter : D3D11_FILTER);
    begin
       var fpuMask := SetExceptionMask(exAllArithmeticExceptions);
       try
-         if vDevice.GetSampleDesc(slot).Filter <> D3D11_FILTER_MIN_MAG_MIP_LINEAR then begin
+         if vDevice.GetSampleDesc(slot).Filter <> filter then begin
             var samplerDesc := Default(TD3D11_SAMPLER_DESC);
-            samplerDesc.Filter := D3D11_FILTER_MIN_MAG_MIP_LINEAR;
+            samplerDesc.Filter := filter;
             samplerDesc.AddressU := D3D11_TEXTURE_ADDRESS_CLAMP;
             samplerDesc.AddressV := D3D11_TEXTURE_ADDRESS_CLAMP;
             samplerDesc.AddressW := D3D11_TEXTURE_ADDRESS_CLAMP;
@@ -1200,27 +1201,59 @@ procedure TFMXUContext3D_DX11.DoSetShaderVariable(const aName : String; const aT
             tex2D := GetResource(aTexture.Handle) as ID3D11Texture2D
          else tex2D := BlankTexture;
 
-         vPixelShaderResourceViews[slot] := nil;
-         var hr := vDevice.Device.CreateShaderResourceView(tex2D, nil, vPixelShaderResourceViews[slot]);
-         RaiseIfFailed(hr, 'CreateShaderResourceView');
-         vDevice.DeviceContext.PSSetShaderResources(slot, 1, vPixelShaderResourceViews[slot]);
       finally
          SetExceptionMask(fpuMask);
       end;
    end;
 
-begin
-   if CurrentPixelShader = nil then Exit;
+   procedure SetVertexShaderResource(const slot : Integer);
+   var
 
-   var source : TIContextShaderSource := vPixelShaderSource.GetSelf;
-   var index := source.IndexOfVariable(aName);
-   if index >= 0 then begin
-      SetShaderResource(index);
-      vPixelShaderModified := True;
-      Exit;
+      tex2D : ID3D11Texture2D;
+   begin
+      SetShaderResource(slot, tex2D, D3D11_FILTER_MIN_MAG_MIP_LINEAR);
+
+      vVertexShaderResourceViews[slot] := nil;
+      var hr := vDevice.Device.CreateShaderResourceView(tex2D, nil, vVertexShaderResourceViews[slot]);
+      RaiseIfFailed(hr, 'CreateShaderResourceView');
+      vDevice.DeviceContext.VSSetShaderResources(slot, 1, vVertexShaderResourceViews[slot]);
    end;
 
-   raise EFMXU_DX11Exception.CreateFmt('Shader variable "%s" not found', [ aName ]);
+   procedure SetPixelShaderResource(const slot : Integer);
+   var
+      tex2D : ID3D11Texture2D;
+   begin
+      SetShaderResource(slot, tex2D, D3D11_FILTER_MIN_MAG_MIP_LINEAR);
+
+      vPixelShaderResourceViews[slot] := nil;
+      var hr := vDevice.Device.CreateShaderResourceView(tex2D, nil, vPixelShaderResourceViews[slot]);
+      RaiseIfFailed(hr, 'CreateShaderResourceView');
+      vDevice.DeviceContext.PSSetShaderResources(slot, 1, vPixelShaderResourceViews[slot]);
+   end;
+
+
+begin
+   if CurrentVertexShader <> nil then begin
+      var source : TIContextShaderSource := vVertexShaderSource.GetSelf;
+      var index := source.IndexOfVariable(aName);
+      if index >= 0 then begin
+         SetVertexShaderResource(index);
+         vVertexShaderModified := True;
+//         Exit;
+      end;
+   end;
+
+   if CurrentPixelShader <> nil then begin
+      var source : TIContextShaderSource := vPixelShaderSource.GetSelf;
+      var index := source.IndexOfVariable(aName);
+      if index >= 0 then begin
+         SetPixelShaderResource(index);
+         vPixelShaderModified := True;
+//         Exit;
+      end;
+   end;
+
+//   raise EFMXU_DX11Exception.CreateFmt('Shader variable "%s" not found', [ aName ]);
 end;
 
 // DoSetShaderVariable
