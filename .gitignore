@@ -83,3 +83,4 @@ modules/
 /Demos/PointCloud/AndroidManifest.template.xml
 /Demos/PointCloud/*.deployproj
 /Source/attic
+*.dsv
