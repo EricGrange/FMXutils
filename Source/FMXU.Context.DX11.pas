@@ -1147,7 +1147,7 @@ begin
    vPixelShaderModified := True;
 end;
 
-// DoSetShaderVariable
+// DoSetShaderVariable (array of TVector3D)
 //
 procedure TFMXUContext3D_DX11.DoSetShaderVariable(const aName : String; const data : array of TVector3D);
 
@@ -1176,7 +1176,7 @@ begin
    raise EFMXU_DX11Exception.CreateFmt('Shader variable "%s" not found', [ aName ]);
 end;
 
-// DoSetShaderVariable
+// DoSetShaderVariable (TTexture)
 //
 procedure TFMXUContext3D_DX11.DoSetShaderVariable(const aName : String; const aTexture : TTexture);
 
@@ -1231,15 +1231,16 @@ procedure TFMXUContext3D_DX11.DoSetShaderVariable(const aName : String; const aT
       vDevice.DeviceContext.PSSetShaderResources(slot, 1, vPixelShaderResourceViews[slot]);
    end;
 
-
 begin
+   var found := False;
+
    if CurrentVertexShader <> nil then begin
       var source : TIContextShaderSource := vVertexShaderSource.GetSelf;
       var index := source.IndexOfVariable(aName);
       if index >= 0 then begin
          SetVertexShaderResource(index);
          vVertexShaderModified := True;
-//         Exit;
+         found := True;
       end;
    end;
 
@@ -1249,14 +1250,15 @@ begin
       if index >= 0 then begin
          SetPixelShaderResource(index);
          vPixelShaderModified := True;
-//         Exit;
+         found := True;
       end;
    end;
 
-//   raise EFMXU_DX11Exception.CreateFmt('Shader variable "%s" not found', [ aName ]);
+   if not found then
+      raise EFMXU_DX11Exception.CreateFmt('Shader variable "%s" not found', [ aName ]);
 end;
 
-// DoSetShaderVariable
+// DoSetShaderVariable (TMatrix3D)
 //
 procedure TFMXUContext3D_DX11.DoSetShaderVariable(const aName : String; const matrix : TMatrix3D);
 begin
