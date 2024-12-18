@@ -111,7 +111,8 @@ begin
    end;
 end;
 
-// ghetto loader for txt point clouds from CloudDompare
+// ghetto loader for txt point clouds from CloudCompare and ply
+// if ply skip to end_header then
 // assumes each line is x y z (float) r g b (int) with no header
 procedure LoadFromTxt(const txtFileName : String; cloud : TPointCloud3D);
 var
@@ -129,6 +130,7 @@ var
          Assert(False, s);
    end;
 
+
 begin
    fmt := FormatSettings;
    fmt.DecimalSeparator := '.';
@@ -137,11 +139,20 @@ begin
    var txtFile := TStringList.Create;
    var line := TStringList.Create('"', ' ');
    try
-      // keep only 'v' lines
       txtFile.LoadFromFile(txtFileName);
 
+      var firstVertexLine := 0;
+      if (txtFile.Count > 0) and (txtFile[0] = 'ply') then begin
+         for var i := 0 to txtFile.Count-1 do begin
+            if txtFile[i] = 'end_header' then begin
+               firstVertexLine  := i+1;
+               Break;
+            end;
+         end;
+      end;
+
       cloud.Points.Length := txtFile.Count;
-      for var i := 0 to txtFile.Count-1 do begin
+      for var i := firstVertexLine  to txtFile.Count-1 do begin
          line.DelimitedText := txtFile[i];
          cloud.Points.Vertices[i] := Point3D(
             ParseFloat(line[1]),
@@ -253,7 +264,7 @@ begin
    if BULoadModel.Tag = 0 then begin
       ShowMessage('''
                   Only supports OBJ files with 3 textures coordinates as RGB in 0-1 range
-                  and TXT files with "x y z r g b" lines (xyz float, rgb integer in 0-255 range)
+                  and TXT/PLY files with "x y z r g b" lines (xyz float, rgb integer in 0-255 range)
                   ''');
       BULoadModel.Tag := 1;
    end;
@@ -262,7 +273,7 @@ begin
    var ext := ExtractFileExt(OpenDialog.FileName);
    if SameText(ext, '.obj') then
       LoadFromObj(OpenDialog.FileName, FPointCloud)
-   else if SameText(ext, '.txt') then
+   else if SameText(ext, '.txt') or SameText(ext, '.ply') then
       LoadFromTxt(OpenDialog.FileName, FPointCloud);
 
    AutoCenterAndScale;

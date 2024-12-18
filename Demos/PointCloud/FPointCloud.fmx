@@ -137,7 +137,9 @@ object PointCloudForm: TPointCloudForm
     end
   end
   object OpenDialog: TOpenDialog
-    Filter = 'OBJ files (*.obj)|*.obj|TXT files (*.txt)|*.txt'
+    Filter = 
+      'All supported formats|*.obj;*.txt;*.ply|OBJ files (*.obj)|*.obj|' +
+      'TXT files (*.txt)|*.txt|PLY files (*.ply)|*.ply'
     Left = 504
     Top = 80
   end
