@@ -100,7 +100,7 @@ type
 
    IWebGPUMappedBuffer = interface
       ['{8DBF7A6B-10E3-45A7-93F9-62EF2FC6179A}']
-      function Status : TWGPUBufferMapAsyncStatus;
+      function Status : TWGPUMapAsyncStatus;
       procedure Wait;
       function Data : Pointer;
       function Size : UInt64;
@@ -109,7 +109,7 @@ type
    TIWebGPUMappedBuffer = class (TInterfacedObject, IWebGPUMappedBuffer)
       private
          FBuffer : IWGPUBuffer;
-         FStatus : TWGPUBufferMapAsyncStatus;
+         FStatus : TWGPUMapAsyncStatus;
          FData : Pointer;
          FOffset, FSize : NativeUInt;
 
@@ -120,7 +120,7 @@ type
          ) : IWebGPUMappedBuffer;
          destructor Destroy; override;
 
-         function Status : TWGPUBufferMapAsyncStatus;
+         function Status : TWGPUMapAsyncStatus;
          procedure Wait;
          function Data : Pointer;
          function Size : UInt64;
@@ -767,11 +767,11 @@ begin
 
    var errors := TStringList.Create;
    try
-      var compilationInfoCallbackInfo2 := Default(TWGPUCompilationInfoCallbackInfo2);
-      compilationInfoCallbackInfo2.mode := WGPUCallbackMode_AllowSpontaneous;
-      compilationInfoCallbackInfo2.callback := @CompilationCallback;
-      compilationInfoCallbackInfo2.userdata1 := errors;
-      Result.GetCompilationInfo2(compilationInfoCallbackInfo2);
+      var compilationInfoCallbackInfo := Default(TWGPUCompilationInfoCallbackInfo);
+      compilationInfoCallbackInfo.mode := WGPUCallbackMode_AllowProcessEvents;
+      compilationInfoCallbackInfo.callback := CompilationCallback;
+      compilationInfoCallbackInfo.userdata1 := errors;
+      var future := Result.GetCompilationInfo(compilationInfoCallbackInfo);
       if errors.Count > 0 then
          raise EFMXU_WebGPUException.Create('Vertex Shader error:'#13#10 + errors.Text);
    finally
@@ -1500,12 +1500,12 @@ end;
 // ------------------ TIWebGPUMappedBuffer ------------------
 // ------------------
 
-procedure BufferMappedCallback(status: TWGPUBufferMapAsyncStatus; userdata: Pointer); cdecl;
+procedure BufferMappedCallback(status: TWGPUMapAsyncStatus; const &message: TWGPUStringView; userdata1: Pointer; userdata2: Pointer); cdecl;
 begin
-   var mapped := TIWebGPUMappedBuffer(userdata);
+   var mapped := TIWebGPUMappedBuffer(userdata1);
    mapped.FStatus := status;
    try
-      if status = WGPUBufferMapAsyncStatus_Success then
+      if status = WGPUMapAsyncStatus_Success then
          mapped.FData := mapped.FBuffer.GetConstMappedRange(mapped.FOffset, mapped.FSize);
    finally
       mapped._Release;
@@ -1524,8 +1524,15 @@ begin
    instance.FBuffer := aBuffer;
    instance.FOffset := aOffset;
    instance.FSize := aSize;
-   aBuffer.MapAsync(aMode, aOffset, aSize, @BufferMappedCallback, instance);
+
+   var callbackInfo := Default(TWGPUBufferMapCallbackInfo);
+   callbackInfo.mode := WGPUCallbackMode_AllowSpontaneous;
+   callbackInfo.callback := BufferMappedCallback;
+   callbackInfo.userdata1 := instance;
+
    instance._AddRef;
+
+   aBuffer.MapAsync(aMode, aOffset, aSize, callbackInfo);
 end;
 
 // Destroy
@@ -1538,7 +1545,7 @@ end;
 
 // Status
 //
-function TIWebGPUMappedBuffer.Status : TWGPUBufferMapAsyncStatus;
+function TIWebGPUMappedBuffer.Status : TWGPUMapAsyncStatus;
 begin
    Result := FStatus;
 end;
@@ -1563,7 +1570,7 @@ function TIWebGPUMappedBuffer.Data : Pointer;
 begin
    if Ord(FStatus) = 0 then
       Wait;
-   Assert(FStatus = WGPUBufferMapAsyncStatus_Success);
+   Assert(FStatus = WGPUMapAsyncStatus_Success);
    Result := FData;
 end;
 
