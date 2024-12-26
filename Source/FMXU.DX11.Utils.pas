@@ -329,6 +329,8 @@ begin
       TPixelFormat.BGR_565 :  Result := DXGI_FORMAT_B5G6R5_UNORM;
       TPixelFormat.BGR5_A1 :  Result := DXGI_FORMAT_B5G5R5A1_UNORM;
       TPixelFormat.LA :       Result := DXGI_FORMAT_R8G8_UNORM;
+      TPixelFormat.L :        Result := DXGI_FORMAT_R8_UNORM;
+      TPixelFormat.L16 :      Result := DXGI_FORMAT_R16_UNORM;
       TPixelFormat.R16F :     Result := DXGI_FORMAT_R16_FLOAT;
       TPixelFormat.RG16F :    Result := DXGI_FORMAT_R16G16_FLOAT;
       TPixelFormat.RGBA16F :  Result := DXGI_FORMAT_R16G16B16A16_FLOAT;
