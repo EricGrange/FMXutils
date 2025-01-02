@@ -521,14 +521,14 @@ end;
 // assumes userdata1 is a TStrings
 procedure CompilationCallback(
    status: TWGPUCompilationInfoRequestStatus;
-   const compilationInfo: PWGPUCompilationInfo; userdata1, userdata2: Pointer
+   const compilationInfo: PWGPUCompilationInfo; userdata: Pointer
    ); cdecl;
 begin
    if compilationInfo.messageCount = 0 then Exit;
 
    var p := compilationInfo.messages;
    for var i := 1 to compilationInfo.messageCount do begin
-      TStrings(userdata1).Add(Format(
+      TStrings(userdata).Add(Format(
          'Line %d:%d %s',
          [ p.lineNum, p.linePos, p.message.data ]
       ));
@@ -770,8 +770,8 @@ begin
       var compilationInfoCallbackInfo := Default(TWGPUCompilationInfoCallbackInfo);
       compilationInfoCallbackInfo.mode := WGPUCallbackMode_AllowProcessEvents;
       compilationInfoCallbackInfo.callback := CompilationCallback;
-      compilationInfoCallbackInfo.userdata1 := errors;
-      var future := Result.GetCompilationInfo(compilationInfoCallbackInfo);
+      compilationInfoCallbackInfo.userdata := errors;
+      var future := Result.GetCompilationInfoF(compilationInfoCallbackInfo);
       if errors.Count > 0 then
          raise EFMXU_WebGPUException.Create('Vertex Shader error:'#13#10 + errors.Text);
    finally
@@ -1500,7 +1500,7 @@ end;
 // ------------------ TIWebGPUMappedBuffer ------------------
 // ------------------
 
-procedure BufferMappedCallback(status: TWGPUMapAsyncStatus; const &message: TWGPUStringView; userdata1: Pointer; userdata2: Pointer); cdecl;
+procedure BufferMappedCallback(status: TWGPUMapAsyncStatus; const &message: TWGPUStringView; userdata1, userdata2: Pointer); cdecl;
 begin
    var mapped := TIWebGPUMappedBuffer(userdata1);
    mapped.FStatus := status;
@@ -1525,14 +1525,14 @@ begin
    instance.FOffset := aOffset;
    instance.FSize := aSize;
 
-   var callbackInfo := Default(TWGPUBufferMapCallbackInfo);
+   var callbackInfo := Default(TWGPUBufferMapCallbackInfo2);
    callbackInfo.mode := WGPUCallbackMode_AllowSpontaneous;
    callbackInfo.callback := BufferMappedCallback;
    callbackInfo.userdata1 := instance;
 
    instance._AddRef;
 
-   aBuffer.MapAsync(aMode, aOffset, aSize, callbackInfo);
+   aBuffer.MapAsync2(aMode, aOffset, aSize, callbackInfo);
 end;
 
 // Destroy
