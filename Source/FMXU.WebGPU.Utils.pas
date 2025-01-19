@@ -468,18 +468,18 @@ end;
 
 // AdapterCallback
 //
-procedure AdapterCallback(status: TWGPURequestAdapterStatus; adapter: TWGPUAdapter; const &message: TWGPUStringView; userdata: Pointer); cdecl;
+procedure AdapterCallback(status: TWGPURequestAdapterStatus; adapter: TWGPUAdapter; const &message: TWGPUStringView; userdata1: Pointer; userdata2: Pointer); cdecl;
 begin
    if (status = WGPURequestAdapterStatus_Success) and (adapter <> 0) then
-      TWebGPUDevice(userdata).FAdapter := WGPUFactory.WrapAdapter(adapter);
+      TWebGPUDevice(userdata1).FAdapter := WGPUFactory.WrapAdapter(adapter);
 end;
 
 // DeviceCallback
 //
-procedure DeviceCallback(status: TWGPURequestDeviceStatus; device: TWGPUDevice; const &message: TWGPUStringView; userdata: Pointer); cdecl;
+procedure DeviceCallback(status: TWGPURequestDeviceStatus; device: TWGPUDevice; const &message: TWGPUStringView; userdata1: Pointer; userdata2: Pointer); cdecl;
 begin
    if (status = WGPURequestDeviceStatus_Success) and (device <> 0) then
-      TWebGPUDevice(userData).FDevice := WGPUFactory.WrapDevice(device);
+      TWebGPUDevice(userdata1).FDevice := WGPUFactory.WrapDevice(device);
 end;
 
 // UncapturedErrorCallback
@@ -521,14 +521,15 @@ end;
 // assumes userdata1 is a TStrings
 procedure CompilationCallback(
    status: TWGPUCompilationInfoRequestStatus;
-   const compilationInfo: PWGPUCompilationInfo; userdata: Pointer
+   const compilationInfo: PWGPUCompilationInfo;
+   userdata1: Pointer; userdata2: Pointer
    ); cdecl;
 begin
    if compilationInfo.messageCount = 0 then Exit;
 
    var p := compilationInfo.messages;
    for var i := 1 to compilationInfo.messageCount do begin
-      TStrings(userdata).Add(Format(
+      TStrings(userdata1).Add(Format(
          'Line %d:%d %s',
          [ p.lineNum, p.linePos, p.message.data ]
       ));
@@ -548,7 +549,11 @@ begin
    end;
 
    var adapterOptions := Default(TWGPURequestAdapterOptions);
-   vInstance.RequestAdapter(adapterOptions, @AdapterCallback, Self);
+   var adapterCallbackInfo := Default(TWGPURequestAdapterCallbackInfo);
+   adapterCallbackInfo.mode := WGPUCallbackMode_AllowSpontaneous;
+   adapterCallbackInfo.callback := AdapterCallback;
+   adapterCallbackInfo.userdata1 := Self;
+   vInstance.RequestAdapter(adapterOptions, adapterCallbackInfo);
    Assert(FAdapter <> nil);
 
    // Limits based on https://developer.mozilla.org/en-US/docs/Web/API/GPUSupportedLimits
@@ -559,14 +564,18 @@ begin
    var deviceDescriptor := Default(TWGPUDeviceDescriptor);
    deviceDescriptor.&label := 'WebGPU Device';
    deviceDescriptor.requiredLimits := @requiredLimits;
-   deviceDescriptor.uncapturedErrorCallbackInfo2.callback := @UncapturedErrorCallback;
-   deviceDescriptor.uncapturedErrorCallbackInfo2.userdata1 := Self;
+   deviceDescriptor.uncapturedErrorCallbackInfo.callback := @UncapturedErrorCallback;
+   deviceDescriptor.uncapturedErrorCallbackInfo.userdata1 := Self;
    var featuresArray : array of TWGPUFeatureName := [
       // WGPUFeatureName_TimestampQuery
    ];
    deviceDescriptor.requiredFeatureCount := Length(featuresArray);
    deviceDescriptor.requiredFeatures := Pointer(featuresArray);
-   FAdapter.RequestDevice(deviceDescriptor, @DeviceCallback, Self);
+   var deviceCallbackInfo := Default(TWGPURequestDeviceCallbackInfo);
+   deviceCallbackInfo.mode := WGPUCallbackMode_AllowSpontaneous;
+   deviceCallbackInfo.callback := DeviceCallback;
+   deviceCallbackInfo.userdata1 := Self;
+   FAdapter.RequestDevice(deviceDescriptor, deviceCallbackInfo);
    Assert(FDevice <> nil);
 
    FQueue := FDevice.GetQueue;
@@ -770,8 +779,8 @@ begin
       var compilationInfoCallbackInfo := Default(TWGPUCompilationInfoCallbackInfo);
       compilationInfoCallbackInfo.mode := WGPUCallbackMode_AllowProcessEvents;
       compilationInfoCallbackInfo.callback := CompilationCallback;
-      compilationInfoCallbackInfo.userdata := errors;
-      var future := Result.GetCompilationInfoF(compilationInfoCallbackInfo);
+      compilationInfoCallbackInfo.userdata1 := errors;
+      var future := Result.GetCompilationInfo(compilationInfoCallbackInfo);
       if errors.Count > 0 then
          raise EFMXU_WebGPUException.Create('Vertex Shader error:'#13#10 + errors.Text);
    finally
@@ -1525,14 +1534,14 @@ begin
    instance.FOffset := aOffset;
    instance.FSize := aSize;
 
-   var callbackInfo := Default(TWGPUBufferMapCallbackInfo2);
+   var callbackInfo := Default(TWGPUBufferMapCallbackInfo);
    callbackInfo.mode := WGPUCallbackMode_AllowSpontaneous;
    callbackInfo.callback := BufferMappedCallback;
    callbackInfo.userdata1 := instance;
 
    instance._AddRef;
 
-   aBuffer.MapAsync2(aMode, aOffset, aSize, callbackInfo);
+   aBuffer.MapAsync(aMode, aOffset, aSize, callbackInfo);
 end;
 
 // Destroy
