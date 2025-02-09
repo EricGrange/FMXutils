@@ -501,7 +501,6 @@ begin
       WGPUErrorType_OutOfMemory : msg := 'OutOfMemory: ';
       WGPUErrorType_Internal : msg := 'Internal: ';
       WGPUErrorType_Unknown : msg := 'Unknown: ';
-      WGPUErrorType_DeviceLost : msg := 'DeviceLost: ';
    else
       msg := 'Unknown: ';
    end;
@@ -626,12 +625,12 @@ begin
    var mipLevelCount := texture.GetMipLevelCount;
    Assert(mipLevel < mipLevelCount);
 
-   var destination := Default(TWGPUImageCopyTexture);
+   var destination := Default(TWGPUTexelCopyTextureInfo);
    destination.texture := texture.GetHandle;
    destination.mipLevel := mipLevel;
    destination.aspect := WGPUTextureAspect_All;
 
-   var source := Default(TWGPUTextureDataLayout);
+   var source := Default(TWGPUTexelCopyBufferLayout);
    source.bytesPerRow := 4 * width;
    source.rowsPerImage := height;
 

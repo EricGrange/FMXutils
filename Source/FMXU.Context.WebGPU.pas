@@ -659,12 +659,12 @@ begin
       end;
 
       if FTextureBuffer <> nil then begin
-         var imageCopyBuffer := Default(TWGPUImageCopyBuffer);
+         var imageCopyBuffer := Default(TWGPUTexelCopyBufferInfo);
          imageCopyBuffer.layout.bytesPerRow := FTextureBufferPitch;
          imageCopyBuffer.layout.rowsPerImage := Height;
          imageCopyBuffer.buffer := FTextureBuffer.GetHandle;
 
-         var imageCopyTexture := Default(TWGPUImageCopyTexture);
+         var imageCopyTexture := Default(TWGPUTexelCopyTextureInfo);
          imageCopyTexture.texture := FRenderTexture.GetHandle;
          imageCopyTexture.aspect := WGPUTextureAspect_All;
 
@@ -978,12 +978,12 @@ begin
       extent.height := aTexture.Height;
       extent.depthOrArrayLayers := 1;
 
-      var destination := Default(TWGPUImageCopyTexture);
+      var destination := Default(TWGPUTexelCopyTextureInfo);
       destination.texture := tex2D.GetHandle;
       destination.mipLevel := 0;
       destination.aspect := WGPUTextureAspect_All;
 
-      var source := Default(TWGPUTextureDataLayout);
+      var source := Default(TWGPUTexelCopyBufferLayout);
       source.bytesPerRow := SizeOf(TColorRec) * extent.width;
       source.rowsPerImage := extent.height;
 
