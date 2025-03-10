@@ -331,7 +331,6 @@ const
       maxBufferSize : 256 * 1024 * 1024;  // 268435456 bytes (256 MB)
       maxVertexAttributes : 16;
       maxVertexBufferArrayStride : 2048;
-      maxInterStageShaderComponents : 60;
       maxInterStageShaderVariables : 16;
       maxColorAttachments : 8;
       maxColorAttachmentBytesPerSample : 32;
@@ -557,8 +556,8 @@ begin
 
    // Limits based on https://developer.mozilla.org/en-US/docs/Web/API/GPUSupportedLimits
    FMaxTextureSize := cLimits.maxTextureDimension2D;
-   var requiredLimits := Default(TWGPURequiredLimits);
-   requiredLimits.limits := cLimits;
+   var requiredLimits := Default(TWGPULimits);
+   requiredLimits := cLimits;
 
    var deviceDescriptor := Default(TWGPUDeviceDescriptor);
    deviceDescriptor.&label := 'WebGPU Device';
