@@ -21,8 +21,9 @@ unit FMXU.Context;
 interface
 
 uses
-   System.Classes, System.SysUtils, System.UIConsts, System.SyncObjs,
-   FMX.Types3D, FMX.Materials,
+   System.Classes, System.SysUtils, System.UIConsts, System.SyncObjs, System.Types,
+   System.Math.Vectors,
+   FMX.Types3D, FMX.Materials, FMX.Graphics,
    FMXU.Buffers, FMXU.Colors;
 
 {$IFOPT R+}{$DEFINE RANGEON}{$R-}{$ELSE}{$UNDEF RANGEON}{$ENDIF}
@@ -54,8 +55,6 @@ type
 
          function GetCurrentMaterialClass : TMaterialClass;
          procedure SetCurrentMaterialClass(materialClass : TMaterialClass);
-
-         function StillValid(aContext3D : TContext3D) : Boolean; virtual; abstract;
 
       public
          // use in combination with DrawGPUPrimitives
@@ -93,6 +92,9 @@ type
 
          function SupportsGPUPrimitives : Boolean;
          function GetFMXUContext : TFMXUContext3D;
+
+         // Set the internal projection matrix field and mark it as not needing a recalc
+         procedure SetProjectionMatrix(const aMatrix : TMatrix3D);
    end;
 
    // wraps a context shader source in an interface
@@ -184,6 +186,14 @@ var
    vContextShaderSimplifiedArch : TContextShaderArch;
    vShaderIndexBase : Integer;
    vD3D_VS_Target, vD3D_PS_Target : AnsiString;
+
+type
+  TContext3DMatrixCracker = class
+    FBeginSceneCount: Integer;
+    FRecalcScreenMatrix, FRecalcProjectionMatrix: Boolean;
+    FScreenMatrix, FProjectionMatrix: TMatrix3D;
+    FInvScreenMatrix, FInvProjectionMatrix: TMatrix3D;
+  end;
 
 // Prepare
 //
@@ -669,6 +679,21 @@ function TFMXUContext3DHelper.GetFMXUContext : TFMXUContext3D;
 begin
    Assert(Self is TFMXUContext3D);
    Result := TFMXUContext3D(Self);
+end;
+
+// SetProjectionMatrix
+//
+procedure TFMXUContext3DHelper.SetProjectionMatrix(const aMatrix : TMatrix3D);
+var
+  cracker : TContext3DMatrixCracker;
+begin
+  cracker := TContext3DMatrixCracker(
+      IntPtr(@Self.BeginSceneCount)
+    - IntPtr(@TContext3DMatrixCracker(nil).FBeginSceneCount)
+  );
+  cracker.FRecalcProjectionMatrix := False;
+  cracker.FProjectionMatrix := aMatrix;
+  cracker.FInvProjectionMatrix := aMatrix.Inverse;
 end;
 
 // ------------------
