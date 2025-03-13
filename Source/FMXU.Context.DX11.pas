@@ -142,6 +142,12 @@ type
 
          class function BlankTexture : ID3D11Texture2D;
 
+         class function CreateForRenderTarget(
+            aWidth, aHeight : Integer;
+            const aRenderTargetView : ID3D11RenderTargetView;
+            const aDepthStencilView : ID3D11DepthStencilView
+            ) : TFMXUContext3D_DX11;
+
          class function CreateBuffer(dataSize, bindType : Cardinal; usage : TD3D11_USAGE; cpuAccess : UINT) : ID3D11Buffer;
          class function CreateBufferFromData(dataSize, bindType : Cardinal; usage : TD3D11_USAGE; cpuAccess : UINT; dataPointer : Pointer) : ID3D11Buffer;
          class function MapBuffer(const buffer : ID3D11Buffer; mapType: D3D11_MAP) : TD3D11_MAPPED_SUBRESOURCE;
@@ -290,6 +296,25 @@ begin
    Result := vBlankTex2D;
 end;
 
+// CreateForRenderTarget
+//
+class function TFMXUContext3D_DX11.CreateForRenderTarget(
+   aWidth, aHeight : Integer;
+   const aRenderTargetView : ID3D11RenderTargetView;
+   const aDepthStencilView : ID3D11DepthStencilView
+   ) : TFMXUContext3D_DX11;
+begin
+   if vStates = nil then
+     vStates := TDX11DeviceStates.Create;
+
+   Result := TFMXUContext3D_DX11.Create;
+   PInteger(@Result.Width)^ := aWidth;
+   PInteger(@Result.Height)^ := aHeight;
+   Result.InitContext;
+   Result.FRenderTargetView := aRenderTargetView;
+   Result.FDepthStencilView := aDepthStencilView;
+end;
+
 // CreateBuffer
 //
 class function TFMXUContext3D_DX11.CreateBuffer(dataSize, bindType : Cardinal; usage : TD3D11_USAGE; cpuAccess : UINT) : ID3D11Buffer;
@@ -343,7 +368,8 @@ constructor TFMXUContext3D_DX11.CreateFromWindow(
    );
 begin
    inherited;
-   vStates := TDX11DeviceStates.Create;
+   if vStates = nil then
+     vStates := TDX11DeviceStates.Create;
    inherited CreateBuffer;
 end;
 
@@ -355,7 +381,8 @@ constructor TFMXUContext3D_DX11.CreateFromTexture(
    );
 begin
    inherited;
-   vStates := TDX11DeviceStates.Create;
+   if vStates = nil then
+     vStates := TDX11DeviceStates.Create;
    inherited CreateBuffer;
 end;
 
@@ -674,7 +701,7 @@ begin
             0, FRenderTargetTex2D,
             0, PixelFormatToDXGIFormat(Texture.PixelFormat)
          );
-      end else begin
+      end else if FSwapChain <> nil then begin
          // swap to present
          var hr := FSwapChain.Present(Ord(VSync), 0);
          RaiseIfFailed(hr, 'DoEndScene Present');
