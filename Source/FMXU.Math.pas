@@ -31,7 +31,7 @@ type
       m41: 0; m42: 0; m43: 0; m44: 1;
     );
 
-    function SameMatrix(const m : TMatrix3D) : Boolean;
+    function IsSameMatrix(const m : TMatrix3D) : Boolean;
   end;
 
 // ------------------------------------------------------------------
@@ -46,9 +46,9 @@ implementation
 // ------------------ TMatrix3DHelper ------------------
 // ------------------
 
-// SameMatrix
+// IsSameMatrix
 //
-function TMatrix3DHelper.SameMatrix(const m : TMatrix3D) : Boolean;
+function TMatrix3DHelper.IsSameMatrix(const m : TMatrix3D) : Boolean;
 type
   T8Int64 = array [ 0 .. 7 ] of Int64;
   P8Int64 = ^T8Int64;
