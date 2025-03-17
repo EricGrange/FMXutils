@@ -135,6 +135,8 @@ type
                                        const aDepthStencil : Boolean); override;
 
       public
+         class property Device : TDX11Device read vDevice;
+
          class procedure TestDriverSupport(
             out aDriverType : D3D_DRIVER_TYPE;
             out aFeatureLevel : TD3D_FEATURE_LEVEL;
@@ -150,11 +152,14 @@ type
 
          class function CreateBuffer(dataSize, bindType : Cardinal; usage : TD3D11_USAGE; cpuAccess : UINT) : ID3D11Buffer;
          class function CreateBufferFromData(dataSize, bindType : Cardinal; usage : TD3D11_USAGE; cpuAccess : UINT; dataPointer : Pointer) : ID3D11Buffer;
-         class function MapBuffer(const buffer : ID3D11Buffer; mapType: D3D11_MAP) : TD3D11_MAPPED_SUBRESOURCE;
-         class procedure UnmapBuffer(const buffer : ID3D11Buffer);
+         class function  MapBuffer(const buffer : ID3D11Buffer; mapType: D3D11_MAP) : TD3D11_MAPPED_SUBRESOURCE; inline;
+         class procedure UnmapBuffer(const buffer : ID3D11Buffer); inline;
 
          function  MapToBits(const aRect : TRect) : TD3D11_MAPPED_SUBRESOURCE;
          procedure UnmapToBits;
+
+         class function  MapTexture(const res : ID3D11Resource; mapType: D3D11_MAP) : TD3D11_MAPPED_SUBRESOURCE; inline;
+         class procedure UnmapTexture(const res : ID3D11Resource); inline;
 
          class function Valid : Boolean; override;
          class function PixelFormat : TPixelFormat; override;
@@ -663,6 +668,20 @@ end;
 procedure TFMXUContext3D_DX11.UnmapToBits;
 begin
    vDevice.Unmap(FCopyToBitsTex2D);
+end;
+
+// MapTexture
+//
+class function TFMXUContext3D_DX11.MapTexture(const res : ID3D11Resource; mapType: D3D11_MAP) : TD3D11_MAPPED_SUBRESOURCE;
+begin
+   Result := vDevice.Map(res, mapType);
+end;
+
+// UnmapTexture
+//
+class procedure TFMXUContext3D_DX11.UnmapTexture(const res : ID3D11Resource);
+begin
+   vDevice.Unmap(res);
 end;
 
 // DoBeginScene
