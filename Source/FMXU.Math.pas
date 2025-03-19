@@ -32,7 +32,11 @@ type
     );
 
     function IsSameMatrix(const m : TMatrix3D) : Boolean;
+    function ToString : String; inline;
   end;
+
+function Vector3DToString(const aVector : TVector3D) : String;
+function Matrix3DToString(const aMatrix : TMatrix3D) : String;
 
 // ------------------------------------------------------------------
 // ------------------------------------------------------------------
@@ -41,6 +45,23 @@ implementation
 // ------------------------------------------------------------------
 // ------------------------------------------------------------------
 // ------------------------------------------------------------------
+
+// Vector3DToString
+//
+function Vector3DToString(const aVector : TVector3D) : String;
+begin
+   Result := Format('[ %f %f %f %f ]', [ aVector.X, aVector.Y, aVector.Z, aVector.W ]);
+end;
+
+// Matrix3DToString
+//
+function Matrix3DToString(const aMatrix : TMatrix3D) : String;
+begin
+   Result := '[ ' + Vector3DToString(aMatrix.M[0])
+                  + Vector3DToString(aMatrix.M[1])
+                  + Vector3DToString(aMatrix.M[2])
+                  + Vector3DToString(aMatrix.M[3]) + ' ]';
+end;
 
 // ------------------
 // ------------------ TMatrix3DHelper ------------------
@@ -61,6 +82,13 @@ begin
             and (pSelf[2] = pOther[2]) and (pSelf[3] = pOther[3])
             and (pSelf[4] = pOther[4]) and (pSelf[5] = pOther[5])
             and (pSelf[6] = pOther[6]) and (pSelf[7] = pOther[7]);
+end;
+
+// ToString
+//
+function TMatrix3DHelper.ToString : String;
+begin
+   Result := Matrix3DToString(Self);
 end;
 
 end.
