@@ -38,6 +38,11 @@ type
 function Vector3DToString(const aVector : TVector3D) : String;
 function Matrix3DToString(const aMatrix : TMatrix3D) : String;
 
+const
+  cPoint3D_X : TPoint3D = (X: 1; Y: 0; Z: 0);
+  cPoint3D_Y : TPoint3D = (X: 0; Y: 1; Z: 0);
+  cPoint3D_Z : TPoint3D = (X: 0; Y: 0; Z: 1);
+
 // ------------------------------------------------------------------
 // ------------------------------------------------------------------
 // ------------------------------------------------------------------
