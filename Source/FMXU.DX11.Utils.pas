@@ -173,6 +173,7 @@ function StencilFuncToDX11Comp(stencilFunc : TStencilFunc) : D3D11_COMPARISON_FU
 function PixelFormatToDXGIFormat(pf : TPixelFormat) : DXGI_FORMAT;
 
 procedure EnumerateDX11Adapters(adapterList : TStrings);
+function GetAdapterIndexByLuid(var aAdapter: IDXGIAdapter): Integer;
 
 procedure RaiseIfFailed(hr : HResult; const msg : String);
 
@@ -209,6 +210,47 @@ begin
          Inc(i);
       end;
    end;
+end;
+
+// GetAdapterIndexByLuid
+//
+function GetAdapterIndexByLuid(var aAdapter: IDXGIAdapter): Integer;
+var
+  lFactory: IDXGIFactory1;
+  lTempAdapter: IDXGIAdapter1;
+  lAdapterDesc: DXGI_ADAPTER_DESC;
+  lTempDesc: DXGI_ADAPTER_DESC;
+  lResult: HRESULT;
+  lIndex: Integer;
+begin
+  Result := -1;
+
+  // Get the LUID from the input adapter
+  lResult := aAdapter.GetDesc(lAdapterDesc);
+  if lResult < 0 then
+    Exit;
+
+  // Create DXGI Factory
+  lResult := CreateDXGIFactory1(IID_IDXGIFactory1, lFactory);
+  if lResult < 0 then
+    Exit;
+
+  // Enumerate adapters and compare LUIDs
+  lIndex := 0;
+  while lFactory.EnumAdapters1(lIndex, lTempAdapter) >= 0 do
+  begin
+    if lTempAdapter.GetDesc(lTempDesc) >= 0 then
+    begin
+      if (lTempDesc.AdapterLuid.LowPart = lAdapterDesc.AdapterLuid.LowPart) and
+         (lTempDesc.AdapterLuid.HighPart = lAdapterDesc.AdapterLuid.HighPart) then
+      begin
+        Result := lIndex;
+        Break;
+      end;
+    end;
+    Inc(lIndex);
+    lTempAdapter := nil; // Release the reference
+  end;
 end;
 
 // VertexElementsToDX11Declaration
@@ -355,6 +397,7 @@ var
    dxgiDevice : IDXGIDevice;
    dxgiAdapter : IDXGIAdapter1;
    adapterDesc : DXGI_ADAPTER_DESC;
+   requestedFeatureLevel : D3D_FEATURE_LEVEL;
 begin
    inherited Create;
    var flags := D3D11_CREATE_DEVICE_BGRA_SUPPORT;
@@ -388,9 +431,11 @@ begin
          if Failed(hr) then
             raise Exception.CreateFmt('Failed to enumerate adapter %d', [ whichGPU ]);
 
+         requestedFeatureLevel := FFeatureLevel;
          hr := D3D11CreateDevice(
             dxgiAdapter, D3D_DRIVER_TYPE_UNKNOWN, 0, flags,
-            nil, 0, D3D11_SDK_VERSION, FDevice, FFeatureLevel, FDeviceContext
+            @requestedFeatureLevel, 1, D3D11_SDK_VERSION,
+            FDevice, FFeatureLevel, FDeviceContext
          );
          if Failed(hr) or (FDeviceContext = nil) then begin
             dxgiAdapter.GetDesc(adapterDesc);
