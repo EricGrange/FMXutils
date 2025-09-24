@@ -15,6 +15,8 @@
 {**********************************************************************}
 unit FMXU.Math;
 
+{$include fmxu.inc}
+
 interface
 
 uses
@@ -37,6 +39,8 @@ type
 
 function Vector3DToString(const aVector : TVector3D) : String;
 function Matrix3DToString(const aMatrix : TMatrix3D) : String;
+
+function RoundSingle(const aValue : Single) : Int64; {$ifndef WIN64_ASM}inline;{$endif}
 
 const
   cPoint3D_X : TPoint3D = (X: 1; Y: 0; Z: 0);
@@ -67,6 +71,20 @@ begin
                   + Vector3DToString(aMatrix.M[2])
                   + Vector3DToString(aMatrix.M[3]) + ' ]';
 end;
+
+// RoundSingle
+//
+function RoundSingle(const aValue : Single) : Int64;
+{$ifdef WIN64_ASM}
+asm
+  .NOFRAME
+  cvtss2si rax, xmm0
+end;
+{$else}
+begin
+  Result := Round(aValue);
+end;
+{$endif}
 
 // ------------------
 // ------------------ TMatrix3DHelper ------------------
